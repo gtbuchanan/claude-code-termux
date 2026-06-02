@@ -1,0 +1,119 @@
+name: Release watch
+
+# Polls Anthropic's Claude Code release channel and runs the full build/test
+# against any newly-released version. The patch pipeline — notably the
+# patch-execpath.py byte-anchor, which bun's minifier can rotate out from under
+# us between releases — is the fragile surface; this surfaces a break within a
+# day of publication instead of when a user next installs. An actions/cache key
+# per version gates the e2e so it runs once per release, not every day.
+on:
+  schedule:
+    - cron: '0 13 * * *' # daily, ~13:00 UTC
+  # Manual re-check, and keeps the schedule from being auto-disabled after 60
+  # days of repository inactivity.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      fresh: ${{ steps.gate.outputs.fresh }}
+    steps:
+      - name: Resolve latest Claude Code version
+        id: resolve
+        run: |
+          set -eu
+          # Same source of truth bootstrap.sh's resolve_version() uses.
+          v=$(curl -fsSL --retry 3 \
+            https://downloads.claude.ai/claude-code-releases/latest \
+            | tr -d '[:space:]')
+          case "$v" in
+            [0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "unexpected version string: '$v'" >&2; exit 1 ;;
+          esac
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Check tested-version cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .claude-tested
+          key: claude-tested-${{ steps.resolve.outputs.version }}
+          lookup-only: true
+
+      - name: Decide whether to verify
+        id: gate
+        env:
+          VERSION: ${{ steps.resolve.outputs.version }}
+          HIT: ${{ steps.cache.outputs.cache-hit }}
+        run: |
+          set -eu
+          if [ "$HIT" = 'true' ]; then
+            echo "Claude Code $VERSION already verified — skipping."
+            echo "fresh=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Claude Code $VERSION is new — verifying."
+            echo "fresh=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Reuse the exact PR/CD pipeline, pinned to the detected version so we record
+  # what we actually tested (not whatever "latest" resolves to mid-run).
+  verify:
+    needs: detect
+    if: needs.detect.outputs.fresh == 'true'
+    uses: ./.github/workflows/ci.yml
+    with:
+      claude_version: ${{ needs.detect.outputs.version }}
+
+  # Record the pass so tomorrow's run skips this version (saved only on success,
+  # so a failure is retried daily until fixed).
+  record:
+    needs: [detect, verify]
+    if: needs.detect.outputs.fresh == 'true' && needs.verify.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark version verified
+        run: mkdir -p .claude-tested && echo "${{ needs.detect.outputs.version }}" > .claude-tested/version
+      - uses: actions/cache/save@v4
+        with:
+          path: .claude-tested
+          key: claude-tested-${{ needs.detect.outputs.version }}
+
+  # File a tracked, deduplicated issue when a new release breaks the pipeline.
+  notify:
+    needs: [detect, verify]
+    if: needs.detect.outputs.fresh == 'true' && needs.verify.result == 'failure'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Open an issue (deduped by title)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.detect.outputs.version }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -eu
+          title="Claude Code $VERSION fails the Termux patch pipeline"
+          open=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --search "in:title \"$title\"" --json number --jq 'length')
+          if [ "$open" -gt 0 ]; then
+            echo "An open issue with this title already exists — not duplicating."
+            exit 0
+          fi
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body \
+          "The scheduled build/test against Claude Code \`$VERSION\` failed.
+
+          The most likely cause is \`package/payload/libexec/patch-execpath.py\`:
+          bun's minifier rotates identifiers between releases, so the byte
+          anchor (the trailing \`).TMUX=\`) may no longer match exactly once.
+          The patch fails loudly (match count != 1) and the failure output now
+          includes a byte window around each \`process.execPath\` occurrence to
+          show the new surrounding shape.
+
+          Failed run: $RUN_URL"

@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_call:
+    inputs:
+      claude_version:
+        description: Claude Code version to test (empty = latest).
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      # Auto-discovers every shell script (by shebang + extension), including
+      # the extension-less maintainer scripts (postinst, postrm, …).
+      - uses: ludeeus/action-shellcheck@2.0.0
+
+  termux:
+    # Native arm64 runner (free for public repos): the aarch64 container runs
+    # at native speed, no QEMU emulation needed.
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build, install + test in termux-docker
+        env:
+          CLAUDE_CODE_VERSION: ${{ inputs.claude_version }}
+        run: |
+          set -eu
+          mkdir -p artifacts/packages && chmod 777 artifacts/packages
+          # termux-docker's entrypoint drops privileges and sanitizes the
+          # environment, so `docker run -e` never reaches the command. Pass the
+          # run number (version.sh's CalVer input) and the Claude Code version
+          # to test (empty = latest) as positional args to a single-quoted
+          # script instead — nothing from the host is interpolated into the
+          # container command.
+          docker run --rm --privileged \
+            -v "$PWD:/src:ro" -v "$PWD/artifacts/packages:/out" \
+            termux/termux-docker:aarch64 \
+            bash -c '
+              set -eu
+              cp -r /src ~/work && cd ~/work
+              # Ephemeral cache dir: exercises the CLAUDE_CODE_CACHE_DIR path
+              # (the forced-update cache-hit assertion) within this run, at no
+              # extra download. Not persisted — CI re-downloads each run.
+              GITHUB_RUN_NUMBER="$1" CLAUDE_CODE_VERSION="$2" \
+                CLAUDE_CODE_CACHE_DIR="$HOME/cc-cache" bash scripts/test.sh
+              cp ~/work/artifacts/packages/*.deb /out/
+            ' termux-test "$GITHUB_RUN_NUMBER" "$CLAUDE_CODE_VERSION"
+      - name: Upload .deb
+        uses: actions/upload-artifact@v7
+        with:
+          name: deb
+          path: artifacts/packages/*.deb
+          if-no-files-found: error

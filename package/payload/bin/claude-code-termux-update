@@ -1,0 +1,12 @@
+#!/data/data/com.termux/files/usr/bin/bash
+#
+# Update the Claude Code binary to the configured version — latest, or the pin
+# in /etc/claude-code-termux.conf (or the CLAUDE_CODE_VERSION environment
+# variable). Re-downloads and re-patches ONLY when the resolved version differs
+# from what's installed, so it is safe to run unattended on a schedule (cron,
+# termux-job-scheduler, …).
+#
+# Pass --force to re-download and re-patch even when the version is unchanged
+# (e.g. to repair a corrupted binary or re-apply after a failed patch).
+#
+exec "${PREFIX:-/data/data/com.termux/files/usr}/libexec/claude-code-termux/bootstrap.sh" "${1:-update}"

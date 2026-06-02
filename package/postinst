@@ -1,0 +1,52 @@
+#!/data/data/com.termux/files/usr/bin/bash
+#
+# postinst — merge the two settings.json keys Claude needs on Termux, then
+# download + patch the binary so `claude` works immediately. The compiled
+# launcher cannot self-fetch, so the binary must exist before first use.
+#
+# CLAUDE_CODE_SKIP_SETTINGS  skip the settings merge (e.g. when a dotfile
+#                            manager owns settings.json).
+# CLAUDE_CODE_VERSION        pin the version to fetch (else: latest).
+#
+set -e
+
+PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
+: "${HOME:=$PREFIX/../home}"
+SETTINGS="${CLAUDE_CODE_SETTINGS:-$HOME/.claude/settings.json}"
+TERMUX_EXEC_LIB="$PREFIX/lib/libtermux-exec-ld-preload.so"
+BOOTSTRAP="$PREFIX/libexec/claude-code-termux/bootstrap.sh"
+
+case "$1" in
+  configure)
+    # Required keys:
+    #   env.LD_PRELOAD — re-arms termux-exec for SUBPROCESSES so
+    #                    #!/usr/bin/env shebangs (pnpm, npx, …) resolve. It is
+    #                    applied after ld.so finishes with claude, so it never
+    #                    crashes claude itself.
+    #   autoUpdates    — false, so the in-session updater never overwrites the
+    #                    ELF-patched binary with a stock glibc one that won't exec.
+    if [ -z "${CLAUDE_CODE_SKIP_SETTINGS:-}" ] && command -v jq >/dev/null 2>&1; then
+      mkdir -p "$(dirname "$SETTINGS")"
+      [ -f "$SETTINGS" ] || printf '{}\n' > "$SETTINGS"
+      tmp=$(mktemp)
+      if jq --arg preload "$TERMUX_EXEC_LIB" '
+            .autoUpdates = false
+          | .env = ((.env // {}) + {LD_PRELOAD: $preload})
+        ' "$SETTINGS" > "$tmp" 2>/dev/null; then
+        mv "$tmp" "$SETTINGS"
+      else
+        rm -f "$tmp"
+        echo "claude-code-termux: could not merge $SETTINGS; leaving it unchanged." >&2
+      fi
+    fi
+    # Download + patch the binary now (network). Best-effort: if it fails
+    # (e.g. offline at install), the user can run claude-code-termux-update.
+    if "$BOOTSTRAP" ensure; then
+      echo "claude-code-termux: ready — run 'claude'." >&2
+    else
+      echo "claude-code-termux: binary not fetched (offline?). Run 'claude-code-termux-update' when online." >&2
+    fi
+    ;;
+esac
+
+exit 0

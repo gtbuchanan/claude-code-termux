@@ -1,0 +1,18 @@
+Package: claude-code-termux
+Version: @VERSION@
+Architecture: aarch64
+Maintainer: Taylor Buchanan <gtbuchanan@users.noreply.github.com>
+Section: devel
+Priority: optional
+Depends: bash, curl, jq, python3, glibc-runner, patchelf-glibc
+Homepage: https://github.com/gtbuchanan/claude-code-termux
+Description: Run Claude Code natively on Termux/Android (aarch64)
+ Anthropic ships Claude Code only as glibc ELF binaries with no android-arm64
+ build, so the npm install path is broken on Termux. This package installs a
+ launcher that downloads the official linux-arm64 build from Anthropic on
+ first run and patches its ELF interpreter to Termux's glibc loader so the
+ kernel can exec it directly.
+ .
+ The Claude Code binary is downloaded directly from Anthropic and is not
+ redistributed by this package. Your use of Claude Code is governed by
+ Anthropic's Commercial Terms of Service.

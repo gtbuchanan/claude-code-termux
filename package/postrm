@@ -1,0 +1,18 @@
+#!/data/data/com.termux/files/usr/bin/bash
+#
+# postrm — the downloaded Claude Code binary is created at run time (not
+# shipped in the package), so dpkg does not track it. Clean it up on removal.
+# settings.json is left untouched: it may hold the user's own edits.
+#
+set -e
+
+PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
+OPT_DIR="$PREFIX/opt/claude-code-termux"
+
+case "$1" in
+  remove|purge)
+    rm -rf "$OPT_DIR"
+    ;;
+esac
+
+exit 0

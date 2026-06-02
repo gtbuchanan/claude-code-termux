@@ -1,0 +1,51 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Build + test on every push to main (reuses the PR workflow) and upload the
+  # .deb the release job publishes — built and tested once, no rebuild.
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+
+  # Gated by the `release` environment (configure required reviewers in repo
+  # settings → Environments → release). Publishes the exact .deb the ci job
+  # built; the version is read from its filename (CalVer YYYY.MM.<run_number>).
+  release:
+    name: Release
+    needs: ci
+    environment: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download the built .deb
+        uses: actions/download-artifact@v8
+        with:
+          name: deb
+          path: artifacts/packages
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          deb=$(ls artifacts/packages/*.deb)
+          version=$(basename "$deb" | sed -E 's/^claude-code-termux_(.+)_aarch64\.deb$/\1/')
+          # --generate-notes builds the changelog from PRs/commits since the
+          # previous tag; --notes is pre-pended to it (the .deb is attached here,
+          # so the redistribution note belongs on the release page).
+          gh release create "v${version}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "claude-code-termux v${version}" \
+            --notes 'The Claude Code binary is downloaded directly from Anthropic and is not redistributed by this project.' \
+            --generate-notes \
+            "$deb"
