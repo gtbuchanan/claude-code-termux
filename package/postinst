@@ -15,6 +15,8 @@ PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 SETTINGS="${CLAUDE_CODE_SETTINGS:-$HOME/.claude/settings.json}"
 TERMUX_EXEC_LIB="$PREFIX/lib/libtermux-exec-ld-preload.so"
 BOOTSTRAP="$PREFIX/libexec/claude-code-termux/bootstrap.sh"
+WRAPPER="$PREFIX/bin/claude"
+NATIVE_LINK="$HOME/.local/bin/claude"
 
 case "$1" in
   configure)
@@ -39,6 +41,21 @@ case "$1" in
         echo "claude-code-termux: could not merge $SETTINGS; leaving it unchanged." >&2
       fi
     fi
+    # Symlink the launcher onto Anthropic's native-install path
+    # (~/.local/bin/claude). Claude's health check treats installMethod=native
+    # as a fatal error when this path is missing or invalid; pointing it at the
+    # launcher — not the patched binary directly — keeps the
+    # TMPDIR/LD_PRELOAD/argv[0] setup intact. autoUpdates=false (merged above)
+    # stops the native self-updater from clobbering it with a stock glibc build.
+    # Only created when the path is free or already a symlink — a user-managed
+    # regular file there is left untouched.
+    if [ -L "$NATIVE_LINK" ] || [ ! -e "$NATIVE_LINK" ]; then
+      mkdir -p "$(dirname "$NATIVE_LINK")"
+      ln -sfn "$WRAPPER" "$NATIVE_LINK"
+    else
+      echo "claude-code-termux: $NATIVE_LINK exists and is not a symlink; leaving it unchanged." >&2
+    fi
+
     # Download + patch the binary now (network). Best-effort: if it fails
     # (e.g. offline at install), the user can run claude-code-termux-update.
     if "$BOOTSTRAP" ensure; then

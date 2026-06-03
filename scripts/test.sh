@@ -65,6 +65,15 @@ test -f "$settings"
 jq -e '.autoUpdates == false' "$settings" >/dev/null
 jq -e '.env.LD_PRELOAD | test("libtermux-exec")' "$settings" >/dev/null
 
+# --- Native-path symlink ----------------------------------------------------
+# postinst symlinks ~/.local/bin/claude → the launcher so Claude's
+# installMethod=native health check passes. It must target the launcher (so the
+# env setup is preserved), not the patched binary.
+native_link="${HOME}/.local/bin/claude"
+test -L "$native_link"
+[ "$(readlink "$native_link")" = "$PREFIX/bin/claude" ] \
+  || { echo "native symlink does not point at the launcher"; exit 1; }
+
 # --- Behavior tests (the fixes) --------------------------------------------
 assert_contains() { # <needle> <haystack>
   case "$2" in

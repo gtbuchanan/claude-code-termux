@@ -1,17 +1,27 @@
 #!/data/data/com.termux/files/usr/bin/bash
 #
-# postrm — the downloaded Claude Code binary is created at run time (not
-# shipped in the package), so dpkg does not track it. Clean it up on removal.
-# settings.json is left untouched: it may hold the user's own edits.
+# postrm — the downloaded Claude Code binary and the native-path symlink are
+# created at run time (not shipped in the package), so dpkg does not track them.
+# Clean them up on removal. settings.json is left untouched: it may hold the
+# user's own edits.
 #
 set -e
 
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
+: "${HOME:=$PREFIX/../home}"
 OPT_DIR="$PREFIX/opt/claude-code-termux"
+WRAPPER="$PREFIX/bin/claude"
+NATIVE_LINK="$HOME/.local/bin/claude"
 
 case "$1" in
   remove|purge)
     rm -rf "$OPT_DIR"
+    # Drop the native-path symlink only if it still points at our launcher,
+    # so we never delete a user's own ~/.local/bin/claude. readlink compares
+    # the stored target string, so it works even after dpkg removes $WRAPPER.
+    if [ -L "$NATIVE_LINK" ] && [ "$(readlink "$NATIVE_LINK")" = "$WRAPPER" ]; then
+      rm -f "$NATIVE_LINK"
+    fi
     ;;
 esac
 

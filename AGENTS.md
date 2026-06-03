@@ -36,6 +36,12 @@ publish the binary; the `.deb` contains no Anthropic bytes.
    `env.LD_PRELOAD` (re-arms termux-exec for subprocess `/usr/bin/env` shebangs)
    and `autoUpdates: false` (so the in-session updater can't clobber the patched
    binary).
+1. `postinst` symlinks `~/.local/bin/claude` → the launcher (Anthropic's
+   native-install path) so Claude's `installMethod: native` health check passes;
+   `postrm` removes it only when it still points at the launcher. The symlink
+   targets the launcher (not the patched binary), so the env setup is preserved,
+   and `autoUpdates: false` keeps the native self-updater from overwriting it. A
+   user-managed regular file at that path is left untouched.
 
 ## Layout
 
@@ -43,8 +49,8 @@ publish the binary; the `.deb` contains no Anthropic bytes.
 |---|---|
 | `install.sh` | Single install path. Downloads the latest release `.deb` (or installs a local one via `CLAUDE_CODE_DEB=<path>`), enables `glibc-repo`, `apt install`s it. |
 | `package/control` | Metadata. `Depends: bash, curl, jq, python3, glibc-runner, patchelf-glibc`. |
-| `package/postinst` | Settings merge (skip via `CLAUDE_CODE_SKIP_SETTINGS`) + fetch the binary. |
-| `package/postrm` | Removes the fetched binary on uninstall. |
+| `package/postinst` | Settings merge (skip via `CLAUDE_CODE_SKIP_SETTINGS`) + native-path symlink (`~/.local/bin/claude`) + fetch the binary. |
+| `package/postrm` | Removes the fetched binary and the native-path symlink on uninstall. |
 | `package/payload/bin/claude-code-termux-update` | Re-patch only if the version changed (`bootstrap.sh update`; schedulable). `--force` to re-apply. |
 | `package/payload/libexec/bootstrap.sh` | Resolve / download (`curl --retry`, optional `CLAUDE_CODE_CACHE_DIR`) / verify / `patchelf` / execPath-patch engine. |
 | `package/payload/libexec/patch-execpath.py` | The `CLAUDE_CODE_EXECPATH` patch. |
