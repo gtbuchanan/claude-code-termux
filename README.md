@@ -81,6 +81,12 @@ re-downloaded. Leave it empty (the default) to disable caching.
    preserving `argv[0]` so Claude's `grep`/`find`/`rg` dispatch works, and sets
    `TMPDIR`/`CLAUDE_CODE_TMPDIR` to the Termux prefix (only when unset) since
    Termux has no writable `/tmp`.
+1. The postinstall also symlinks the launcher onto Anthropic's native-install
+   path (`~/.local/bin/claude`) so Claude's health check passes when it detects
+   `installMethod: native`. The symlink targets the launcher (not the patched
+   binary), so the env setup still applies, and `autoUpdates: false` keeps the
+   native self-updater from replacing it with a stock glibc build. A
+   user-managed regular file at that path is left untouched.
 
 Update later with `claude-code-termux-update`. It re-downloads and re-patches
 only when the resolved version (latest, or your pin) differs from what's
@@ -132,8 +138,9 @@ CLAUDE_CODE_VERSION="$version" claude-code-termux-update
 pkg uninstall claude-code-termux
 ```
 
-This removes the launcher and the downloaded binary. `~/.claude/settings.json`
-is left untouched.
+This removes the launcher, the downloaded binary, and the native-path symlink
+(`~/.local/bin/claude`, only if it still points at the launcher).
+`~/.claude/settings.json` is left untouched.
 
 ## Prerequisites
 
