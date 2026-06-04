@@ -1,12 +1,7 @@
 ---
 repos:
-  # shellcheck-py bundles the shellcheck binary in a Python wheel, so prek can
-  # provision it without Docker on every dev host (Windows included) and in CI.
-  # `types: [shell]` tags scripts by extension and shebang, covering the
-  # extension-less maintainer scripts (postinst, postrm, claude-code-termux-update).
   - hooks:
       - id: shellcheck
         name: '[Shell] ShellCheck'
-        types: [shell]
     repo: https://github.com/shellcheck-py/shellcheck-py
     rev: v0.11.0.1
