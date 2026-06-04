@@ -6,12 +6,12 @@
 # are covered and the set can't drift as scripts are added.
 set -euo pipefail
 
-git ls-files |
-  while IFS= read -r f; do
+git ls-files -z |
+  while IFS= read -r -d '' f; do
     case $f in
-      *.sh | *.bash) printf '%s\n' "$f" ;;
+      *.sh | *.bash) printf '%s\0' "$f" ;;
       *) [ -f "$f" ] && IFS= read -r line < "$f" &&
-        case $line in '#!'*sh*) printf '%s\n' "$f" ;; esac ;;
+        case $line in '#!'*sh*) printf '%s\0' "$f" ;; esac ;;
     esac
   done |
-  xargs -r shellcheck
+  xargs -0 shellcheck
