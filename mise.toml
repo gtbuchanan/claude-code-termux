@@ -1,0 +1,13 @@
+[settings]
+# `lockfile = true` keeps mise.lock in sync on every install so the
+# gtbuchanan/tooling mise-setup action (MISE_LOCKED=1) can pin exact,
+# checksum-verified tool bytes in CI. `minimum_release_age` mirrors the
+# Renovate 3-day quarantine; it only gates fuzzy/`latest` resolution, so the
+# exact pin below is unaffected.
+lockfile = true
+minimum_release_age = "3d"
+
+[tools]
+# shellcheck is the only host-side dev tool — CI and `mise run lint` both lint
+# every shell script with it (the package is shell + one small C file).
+shellcheck = "0.11.0"

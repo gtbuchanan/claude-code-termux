@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+#MISE description="Build, install, and verify the .deb — the full pipeline"
+#
+# The whole pipeline runs in a Termux environment: compile the launcher,
+# assemble the .deb, install it via install.sh, and assert every fix. On a
+# Termux device that's native (scripts/test.sh); on a dev host we obtain a
+# Termux environment via termux-docker (scripts/test-docker.sh). An optional
+# version arg is forwarded (empty → scripts/version.sh derives the CalVer).
+set -euo pipefail
+
+if [ "$(uname -o 2>/dev/null)" = "Android" ]; then
+  exec bash scripts/test.sh "$@"
+else
+  exec bash scripts/test-docker.sh "$@"
+fi

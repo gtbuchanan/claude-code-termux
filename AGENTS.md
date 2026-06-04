@@ -61,6 +61,25 @@ publish the binary; the `.deb` contains no Anthropic bytes.
 | `scripts/test.sh` | Build + install + assert the fixes, inside termux-docker. |
 | `scripts/test-docker.sh` | Run `test.sh` on your machine via Docker (QEMU off-arm64). |
 | `scripts/version.sh` | Prints the version (see Versioning). |
+| `mise.toml` | Dev-tool pin (`shellcheck`) + `lockfile = true`. Tasks live in `mise-tasks/`. |
+| `mise-tasks/{lint,build}` | File-based mise tasks: `lint` (shellcheck) and `build` (the full pipeline). |
+
+## Dev environment (mise)
+
+[mise](https://mise.jdx.dev) pins the only host-side dev tool, `shellcheck`, and
+runs the dev tasks. `mise.lock` (`lockfile = true`) records checksum-verified
+URLs for all common platforms so installs are reproducible across the Windows/
+arm64 dev hosts and the Linux CI runner.
+
+- `mise run lint` — shellcheck every tracked shell script (extension- or
+  shebang-detected, so the extension-less maintainer scripts are covered).
+  Standalone; runs anywhere.
+- `mise run build [version]` — the full pipeline (compile + package + install +
+  assert), env-aware: `scripts/test.sh` natively on a Termux device, else
+  `scripts/test-docker.sh` (the container) on a dev host. See Building & packaging.
+
+CI installs these tools via the shared `gtbuchanan/tooling/.github/actions/mise-setup`
+action (`MISE_LOCKED=1`, lockfile-keyed cache), then runs `mise run lint`.
 
 ## Versioning
 
@@ -101,8 +120,9 @@ vars **inline** in the `bash -c` string instead.
 
 ## CI/CD
 
-- **`ci.yml`** (`pull_request` + `workflow_call`): lints the shell scripts and
-  runs the termux build/test job, which builds + installs + tests the `.deb`
+- **`ci.yml`** (`pull_request` + `workflow_call`): lints the shell scripts
+  (`mise run lint` via the `mise-setup` action) and runs the termux build/test
+  job, which builds + installs + tests the `.deb`
   once and uploads it as an artifact. Runs on a **native arm64** runner
   (`ubuntu-24.04-arm`) — no QEMU, so the aarch64 container runs natively. The
   `workflow_call` `claude_version` input (empty = latest) pins which Claude

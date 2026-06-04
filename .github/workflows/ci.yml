@@ -15,13 +15,12 @@ permissions:
   contents: read
 
 jobs:
-  shellcheck:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      # Auto-discovers every shell script (by shebang + extension), including
-      # the extension-less maintainer scripts (postinst, postrm, …).
-      - uses: ludeeus/action-shellcheck@2.0.0
+      - uses: gtbuchanan/tooling/.github/actions/mise-setup@main
+      - run: mise run lint
 
   termux:
     # Native arm64 runner (free for public repos): the aarch64 container runs

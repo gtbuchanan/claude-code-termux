@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+#MISE description="Run shellcheck over every tracked shell script (extension or shebang)"
+#
+# Discover scripts by .sh/.bash extension or a shell shebang, so the
+# extension-less maintainer scripts (postinst, postrm, claude-code-termux-update)
+# are covered and the set can't drift as scripts are added.
+set -euo pipefail
+
+git ls-files |
+  while IFS= read -r f; do
+    case $f in
+      *.sh | *.bash) printf '%s\n' "$f" ;;
+      *) [ -f "$f" ] && IFS= read -r line < "$f" &&
+        case $line in '#!'*sh*) printf '%s\n' "$f" ;; esac ;;
+    esac
+  done |
+  xargs -r shellcheck
