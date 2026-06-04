@@ -1,5 +1,5 @@
 ---
-exclude: '[-.]lock\.'
+exclude: '[-.]lock(?:\.|$)'
 repos:
   - hooks:
       - id: check-added-large-files
