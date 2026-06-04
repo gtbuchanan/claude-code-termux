@@ -1,5 +1,29 @@
 ---
+exclude: '[-.]lock\.'
 repos:
+  - hooks:
+      - id: check-added-large-files
+        name: '[*] No Large Files'
+      - id: check-illegal-windows-names
+        name: '[*] No Illegal Windows Names'
+      - id: end-of-file-fixer
+        name: '[*] EOF New Line'
+      - id: fix-byte-order-marker
+        name: '[*] No BOM'
+      - id: forbid-submodules
+        name: '[Git] No Submodules'
+      - id: no-commit-to-branch
+        name: '[Git] No Commit to Branch'
+      - id: trailing-whitespace
+        name: '[*] No Trailing Whitespace'
+    repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+  - hooks:
+      - args: [--strict]
+        id: renovate-config-validator
+        name: '[Renovate] Lint'
+    repo: https://github.com/renovatebot/pre-commit-hooks
+    rev: 43.209.1
   - hooks:
       - id: shellcheck
         name: '[Shell] ShellCheck'
