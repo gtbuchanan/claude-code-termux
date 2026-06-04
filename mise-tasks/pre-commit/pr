@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Run the prek hooks on this branch's changes vs origin/main"
+set -euo pipefail
+
+exec prek run --from-ref origin/main --to-ref HEAD "$@"

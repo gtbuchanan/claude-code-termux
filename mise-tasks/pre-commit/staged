@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Run the prek hooks on staged changes"
+set -euo pipefail
+
+exec prek run "$@"

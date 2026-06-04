@@ -15,6 +15,13 @@ jobs:
     name: CI
     uses: ./.github/workflows/ci.yml
 
+  # Warm the prek hook-environment cache on push so PR builds (which restore the
+  # same key) get cache hits. Peer to ci/release — seeding the cache neither
+  # gates nor depends on the build.
+  pre-commit:
+    name: Pre-Commit
+    uses: gtbuchanan/tooling/.github/workflows/pre-commit-seed.yml@main
+
   # Gated by the `release` environment (configure required reviewers in repo
   # settings → Environments → release). Publishes the exact .deb the ci job
   # built; the version is read from its filename (CalVer YYYY.MM.<run_number>).

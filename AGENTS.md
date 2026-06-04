@@ -61,25 +61,30 @@ publish the binary; the `.deb` contains no Anthropic bytes.
 | `scripts/test.sh` | Build + install + assert the fixes, inside termux-docker. |
 | `scripts/test-docker.sh` | Run `test.sh` on your machine via Docker (QEMU off-arm64). |
 | `scripts/version.sh` | Prints the version (see Versioning). |
-| `mise.toml` | Dev-tool pin (`shellcheck`) + `lockfile = true`. Tasks live in `mise-tasks/`. |
-| `mise-tasks/{lint,build}` | File-based mise tasks: `lint` (shellcheck) and `build` (the full pipeline). |
+| `mise.toml` | Host-side dev-tool pins + `lockfile = true`. Tasks live in `mise-tasks/`. |
+| `.pre-commit-config.yaml` | prek hook definitions — the source of truth for the lint hooks. |
+| `mise-tasks/` | File-based mise tasks (`mise tasks ls`; see Dev environment). |
 
 ## Dev environment (mise)
 
-[mise](https://mise.jdx.dev) pins the only host-side dev tool, `shellcheck`, and
-runs the dev tasks. `mise.lock` (`lockfile = true`) records checksum-verified
-URLs for all common platforms so installs are reproducible across the Windows/
-arm64 dev hosts and the Linux CI runner.
+[mise](https://mise.jdx.dev) pins the host-side dev tooling and runs the dev
+tasks. `mise.lock` (`lockfile = true`) records checksum-verified URLs for all
+common platforms so installs are reproducible across the Windows/arm64 dev
+hosts and the Linux CI runner.
 
-- `mise run lint` — shellcheck every tracked shell script (extension- or
-  shebang-detected, so the extension-less maintainer scripts are covered).
-  Standalone; runs anywhere.
+- `mise run bootstrap` — install the prek git hooks (run once after cloning).
+- `mise run pre-commit:{staged,pr,all}` — run the prek hooks (see
+  `.pre-commit-config.yaml`) scoped to staged changes, this branch vs
+  `origin/main`, or all files. Append `-- <hook-id>` to target one hook.
 - `mise run build [version]` — the full pipeline (compile + package + install +
   assert), env-aware: `scripts/test.sh` natively on a Termux device, else
   `scripts/test-docker.sh` (the container) on a dev host. See Building & packaging.
 
-CI installs these tools via the shared `gtbuchanan/tooling/.github/actions/mise-setup`
-action (`MISE_LOCKED=1`, lockfile-keyed cache), then runs `mise run lint`.
+CI runs the hooks through the shared
+`gtbuchanan/tooling/.github/workflows/pre-commit.yml` reusable workflow (which
+installs the pinned tools via the `mise-setup` action — `MISE_LOCKED=1`,
+lockfile-keyed cache — and runs prek against the PR diff). The local task runs
+the same hooks over all tracked files.
 
 ## Versioning
 
@@ -120,10 +125,12 @@ vars **inline** in the `bash -c` string instead.
 
 ## CI/CD
 
-- **`ci.yml`** (`pull_request` + `workflow_call`): lints the shell scripts
-  (`mise run lint` via the `mise-setup` action) and runs the termux build/test
-  job, which builds + installs + tests the `.deb`
-  once and uploads it as an artifact. Runs on a **native arm64** runner
+- **`ci.yml`** (`pull_request` + `workflow_call`): a `pre-commit` job that calls
+  the shared `tooling/.github/workflows/pre-commit.yml` reusable (PR-only — the
+  reusable diffs against the PR base, so it's skipped on push/schedule
+  `workflow_call` invocations) plus the termux build/test job, which builds +
+  installs + tests the `.deb` once and uploads it as an artifact. Runs on a
+  **native arm64** runner
   (`ubuntu-24.04-arm`) — no QEMU, so the aarch64 container runs natively. The
   `workflow_call` `claude_version` input (empty = latest) pins which Claude
   Code version the test installs.
@@ -138,7 +145,9 @@ vars **inline** in the `bash -c` string instead.
   the `release` GitHub Environment** (configure required reviewers in repo
   settings for the gate to pause) downloads the built artifact and publishes a
   GitHub release. It does **not** rebuild — it ships the exact bytes that were
-  tested; the version is read from the `.deb` filename.
+  tested; the version is read from the `.deb` filename. A peer `pre-commit` job
+  calls the shared `tooling/.github/workflows/pre-commit-seed.yml` reusable to
+  warm the prek hook-environment cache on `main` so PR builds restore it.
 
 ## Conventions
 

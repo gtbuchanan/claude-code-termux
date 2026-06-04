@@ -8,6 +8,4 @@ lockfile = true
 minimum_release_age = "3d"
 
 [tools]
-# shellcheck is the only host-side dev tool — CI and `mise run lint` both lint
-# every shell script with it (the package is shell + one small C file).
-shellcheck = "0.11.0"
+prek = "0.4.3"

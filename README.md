@@ -152,8 +152,8 @@ This removes the launcher, the downloaded binary, and the native-path symlink
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev environment (mise), the
-`lint`/`build` tasks, and how the package is built and tested.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev environment (mise), the dev
+tasks, and how the package is built and tested.
 
 ## License
 

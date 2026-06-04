@@ -32,8 +32,11 @@ the regenerated `mise.lock` alongside any tool change.
 
 The dev workflow runs through file-based mise tasks in `mise-tasks/`:
 
-- `mise run lint` — shellcheck every tracked shell script. Fast, host-side, no
-  Docker; runs anywhere.
+- `mise run bootstrap` — install the prek git hooks. Run once after cloning so
+  the hooks fire on `git commit`.
+- `mise run pre-commit:{staged,pr,all}` — run the prek hooks
+  (`.pre-commit-config.yaml`) scoped to staged changes, this branch vs
+  `origin/main`, or all files. Append `-- <hook-id>` to target one hook.
 - `mise run build [version]` — the full pipeline: compile the launcher, assemble
   the `.deb`, install it via the real `install.sh`, and assert every fix.
   `version` is optional; empty derives the local CalVer (`scripts/version.sh`,

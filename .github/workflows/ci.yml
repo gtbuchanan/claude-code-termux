@@ -15,12 +15,14 @@ permissions:
   contents: read
 
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: gtbuchanan/tooling/.github/actions/mise-setup@main
-      - run: mise run lint
+  pre-commit:
+    name: Pre-Commit
+    # The reusable diffs changed files against the PR base, so it only runs on
+    # pull_request. Push / schedule invocations (cd.yml, release-watch.yml) have
+    # no base_ref — skip rather than hand prek empty --from-ref/--to-ref.
+    if: github.event_name == 'pull_request'
+    # use-pnpm defaults to false: this repo is node-free, so prek runs alone.
+    uses: gtbuchanan/tooling/.github/workflows/pre-commit.yml@main
 
   termux:
     # Native arm64 runner (free for public repos): the aarch64 container runs

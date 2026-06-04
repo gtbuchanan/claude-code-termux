@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#MISE description="Set up the local dev environment (install the prek git hooks)"
+#
+# Installs prek's pre-commit Git shim and pre-builds the hook environments so the
+# first commit isn't slow. Run once after cloning; idempotent (re-run to repair).
+set -euo pipefail
+
+prek install --prepare-hooks
