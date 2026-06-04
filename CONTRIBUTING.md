@@ -2,10 +2,10 @@
 
 ## Prerequisites
 
-[mise] pins the only host-side dev tool — `shellcheck` — and runs the dev
-tasks. **Docker** is also required to build the `.deb` on a non-Termux host (the
-build runs in a Termux environment, which a dev host obtains via
-`termux/termux-docker:aarch64`; see [Building and testing](#building-and-testing)).
+- **[mise]** — pins the dev tooling and runs the dev tasks.
+- **Docker** — required only to build the `.deb` on a non-Termux host; the build
+  runs in a Termux environment a dev host obtains via
+  `termux/termux-docker:aarch64` (see [Building and testing](#building-and-testing)).
 
 Install mise:
 
