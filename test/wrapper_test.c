@@ -36,8 +36,8 @@ static int recording_exec(const char *path, char *const argv[]) {
   free(exec_path);
   exec_path = strdup(path);
   exec_argc = 0;
-  for (char *const *p = argv; *p != NULL && exec_argc < 63; ++p) {
-    exec_argv[exec_argc++] = strdup(*p);
+  for (char *const *arg = argv; *arg != NULL && exec_argc < 63; ++arg) {
+    exec_argv[exec_argc++] = strdup(*arg);
   }
   exec_argv[exec_argc] = NULL;
   return exec_retval;
@@ -45,6 +45,10 @@ static int recording_exec(const char *path, char *const argv[]) {
 
 /* Clear the stub + the three env vars the wrapper touches, for an isolated run. */
 static void reset_fixture(void) {
+  for (int i = 0; i < exec_argc; ++i) {
+    free(exec_argv[i]);
+    exec_argv[i] = NULL;
+  }
   exec_calls = 0;
   exec_argc = 0;
   exec_retval = -1;   /* default: pretend exec failed so the wrapper returns */

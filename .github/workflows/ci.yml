@@ -31,6 +31,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - uses: gtbuchanan/tooling/.github/actions/mise-setup@main
       # -v lists each test by name in the log (default is a compact summary).
       - run: mise run test:wrapper -- -v
@@ -41,6 +43,8 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - name: Build, install + test in termux-docker
         env:
           CLAUDE_CODE_VERSION: ${{ inputs.claude_version }}
