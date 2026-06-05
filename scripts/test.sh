@@ -42,20 +42,26 @@ CLAUDE_CODE_DEB="$deb" bash install.sh
 elf_magic() { od -An -tx1 -N4 "$1" | tr -d ' \n'; }
 
 test -x "$PREFIX/bin/claude"
-[ "$(elf_magic "$PREFIX/bin/claude")" = "7f454c46" ] \
-  || { echo "wrapper is not an ELF binary"; exit 1; }
+[ "$(elf_magic "$PREFIX/bin/claude")" = "7f454c46" ] ||
+  {
+    echo "wrapper is not an ELF binary"
+    exit 1
+  }
 test -x "$PREFIX/libexec/claude-code-termux/bootstrap.sh"
 test -f "$PREFIX/libexec/claude-code-termux/patch-execpath.py"
 
 # Runtime deps pulled by apt:
-command -v jq      >/dev/null
+command -v jq >/dev/null
 command -v python3 >/dev/null
 test -x "$PREFIX/glibc/bin/patchelf"
 
 # postinst downloaded + patched the binary:
 test -x "$PREFIX/opt/claude-code-termux/current"
-[ "$(elf_magic "$PREFIX/opt/claude-code-termux/current")" = "7f454c46" ] \
-  || { echo "patched binary is not an ELF"; exit 1; }
+[ "$(elf_magic "$PREFIX/opt/claude-code-termux/current")" = "7f454c46" ] ||
+  {
+    echo "patched binary is not an ELF"
+    exit 1
+  }
 
 # --- settings.json merge (the shebang fix's mechanism) ---------------------
 # postinst writes the LD_PRELOAD re-export — so Claude's subprocesses inherit
@@ -71,14 +77,20 @@ jq -e '.env.LD_PRELOAD | test("libtermux-exec")' "$settings" >/dev/null
 # env setup is preserved), not the patched binary.
 native_link="${HOME}/.local/bin/claude"
 test -L "$native_link"
-[ "$(readlink "$native_link")" = "$PREFIX/bin/claude" ] \
-  || { echo "native symlink does not point at the launcher"; exit 1; }
+[ "$(readlink "$native_link")" = "$PREFIX/bin/claude" ] ||
+  {
+    echo "native symlink does not point at the launcher"
+    exit 1
+  }
 
 # --- Behavior tests (the fixes) --------------------------------------------
 assert_contains() { # <needle> <haystack>
   case "$2" in
-    *"$1"*) ;;
-    *) echo "FAIL: expected '$1' in output: $2" >&2; exit 1 ;;
+  *"$1"*) ;;
+  *)
+    echo "FAIL: expected '$1' in output: $2" >&2
+    exit 1
+    ;;
   esac
 }
 
@@ -88,8 +100,8 @@ claude --version
 # grep/find dispatch: Claude routes its embedded tools by argv[0]. The compiled
 # wrapper must preserve argv[0] through execv for this to reach ripgrep/bfs —
 # the core fix. A bash wrapper would arrive as argv[0]=bash and never dispatch.
-assert_contains ripgrep "$( (exec -a rg  "$PREFIX/bin/claude" --version) 2>&1 || true)"
-assert_contains bfs     "$( (exec -a bfs "$PREFIX/bin/claude" --version) 2>&1 || true)"
+assert_contains ripgrep "$( (exec -a rg "$PREFIX/bin/claude" --version) 2>&1 || true)"
+assert_contains bfs "$( (exec -a bfs "$PREFIX/bin/claude" --version) 2>&1 || true)"
 
 # LD_PRELOAD clearing: termux-exec is preloaded into every Termux shell (its lib
 # always ships with the termux-exec package). The wrapper must unset it before
@@ -107,7 +119,7 @@ LD_PRELOAD="$lib" "$PREFIX/bin/claude" --version >/dev/null
 probe="$(mktemp -d)/env"
 clang -O2 -DBINARY="\"$PREFIX/bin/env\"" -DTMPDIR_PATH="\"/PROBE_TMPDIR\"" \
   -o "$probe" src/claude-wrapper.c
-assert_contains "TMPDIR=/PROBE_TMPDIR"            "$(env -u TMPDIR -u CLAUDE_CODE_TMPDIR "$probe")"
+assert_contains "TMPDIR=/PROBE_TMPDIR" "$(env -u TMPDIR -u CLAUDE_CODE_TMPDIR "$probe")"
 assert_contains "CLAUDE_CODE_TMPDIR=/PROBE_TMPDIR" "$(env -u TMPDIR -u CLAUDE_CODE_TMPDIR "$probe")"
 # Must not overwrite a value already in the environment.
 assert_contains "TMPDIR=/keep" "$(TMPDIR=/keep "$probe")"
@@ -116,7 +128,7 @@ assert_contains "TMPDIR=/keep" "$(TMPDIR=/keep "$probe")"
 # resolved version differs from what's installed (so it's safe to schedule).
 # Pin to the already-installed version and assert it short-circuits without
 # re-downloading.
-installed=$(readlink "$PREFIX/opt/claude-code-termux/current")   # claude-<ver>
+installed=$(readlink "$PREFIX/opt/claude-code-termux/current") # claude-<ver>
 assert_contains "already current" \
   "$(CLAUDE_CODE_VERSION="${installed#claude-}" claude-code-termux-update 2>&1)"
 

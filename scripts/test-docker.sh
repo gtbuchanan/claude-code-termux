@@ -10,7 +10,7 @@
 set -euo pipefail
 
 root=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)
-version="${1:-}"   # empty → test.sh derives it via version.sh (run number 0 locally)
+version="${1:-}" # empty → test.sh derives it via version.sh (run number 0 locally)
 
 echo "==> Ensuring aarch64 emulation is registered…"
 docker run --rm --privileged tonistiigi/binfmt --install arm64 >/dev/null

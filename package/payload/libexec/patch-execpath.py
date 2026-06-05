@@ -16,6 +16,7 @@ anchored on the trailing `…).TMUX=` and uses backreferences to stay unique.
 Fails loudly if the anchor isn't found exactly once, surfacing binary
 refactors on the next version bump instead of silently mis-patching.
 """
+
 import re
 import sys
 
@@ -38,7 +39,7 @@ if len(matches) != 1:
     windows = []
     start = 0
     while (i := data.find(needle, start)) != -1:
-        windows.append(data[max(0, i - 40):i + len(needle) + 40])
+        windows.append(data[max(0, i - 40) : i + len(needle) + 40])
         start = i + len(needle)
     ctx = "\n  ".join(w.decode("latin-1") for w in windows[:5])
     sys.exit(

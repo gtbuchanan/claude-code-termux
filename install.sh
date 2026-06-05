@@ -25,9 +25,12 @@ REPO="gtbuchanan/claude-code-termux"
 API="https://api.github.com/repos/$REPO/releases/latest"
 
 log() { printf '\033[1;34m==>\033[0m %s\n' "$*" >&2; }
-die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
+die() {
+  printf '\033[1;31merror:\033[0m %s\n' "$*" >&2
+  exit 1
+}
 
-command -v curl    >/dev/null 2>&1 || die "missing 'curl' — pkg install curl"
+command -v curl >/dev/null 2>&1 || die "missing 'curl' — pkg install curl"
 command -v apt-get >/dev/null 2>&1 || die "apt-get not found — this installer is for Termux."
 
 deb="${CLAUDE_CODE_DEB:-}"
@@ -36,10 +39,10 @@ if [ -n "$deb" ]; then
   log "Installing local package $deb"
 else
   log "Resolving the latest release of $REPO…"
-  url=$(curl -fsSL "$API" \
-    | grep -oE '"browser_download_url"[[:space:]]*:[[:space:]]*"[^"]*_aarch64\.deb"' \
-    | head -1 \
-    | sed -E 's/.*"(https[^"]+)"$/\1/')
+  url=$(curl -fsSL "$API" |
+    grep -oE '"browser_download_url"[[:space:]]*:[[:space:]]*"[^"]*_aarch64\.deb"' |
+    head -1 |
+    sed -E 's/.*"(https[^"]+)"$/\1/')
   [ -n "$url" ] || die "no aarch64 .deb asset found in the latest release."
 
   deb=$(mktemp --suffix=.deb)

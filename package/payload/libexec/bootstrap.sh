@@ -34,9 +34,12 @@ OPT_DIR="$PREFIX/opt/claude-code-termux"
 CURRENT="$OPT_DIR/current"
 CONF="$PREFIX/etc/claude-code-termux.conf"
 
-log()  { printf '\033[1;34m==>\033[0m %s\n' "$*" >&2; }
+log() { printf '\033[1;34m==>\033[0m %s\n' "$*" >&2; }
 warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
-die()  { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
+die() {
+  printf '\033[1;31merror:\033[0m %s\n' "$*" >&2
+  exit 1
+}
 
 # curl with built-in resilience to transient network failures: retries on
 # timeouts, 5xx, and connection-refused with exponential backoff. A checksum
@@ -62,8 +65,8 @@ resolve_version() {
     v=$("${CURL[@]}" "$DL_BASE/latest" | tr -d '[:space:]')
   fi
   case "$v" in
-    [0-9]*.[0-9]*.[0-9]*) ;;
-    *) die "unexpected version string: '$v'";;
+  [0-9]*.[0-9]*.[0-9]*) ;;
+  *) die "unexpected version string: '$v'" ;;
   esac
   printf '%s' "$v"
 }
@@ -72,8 +75,8 @@ fetch() {
   local version="$1"
   local binary="$OPT_DIR/claude-$version"
 
-  command -v curl    >/dev/null 2>&1 || die "missing 'curl' — pkg install curl"
-  command -v jq      >/dev/null 2>&1 || die "missing 'jq' — pkg install jq"
+  command -v curl >/dev/null 2>&1 || die "missing 'curl' — pkg install curl"
+  command -v jq >/dev/null 2>&1 || die "missing 'jq' — pkg install jq"
   command -v python3 >/dev/null 2>&1 || die "missing 'python3' — pkg install python"
   [ -x "$PATCHELF" ] || die "patchelf not found at $PATCHELF — pkg install patchelf-glibc"
   [ -e "$GLIBC_LD" ] || die "glibc loader not found at $GLIBC_LD — pkg install glibc-runner"
@@ -85,8 +88,8 @@ fetch() {
   # version is left as-is.
   if [ ! -x "$binary" ]; then
     local checksum tmp cache=""
-    checksum=$("${CURL[@]}" "$DL_BASE/$version/manifest.json" \
-      | jq -er --arg p "$PLATFORM" '.platforms[$p].checksum')
+    checksum=$("${CURL[@]}" "$DL_BASE/$version/manifest.json" |
+      jq -er --arg p "$PLATFORM" '.platforms[$p].checksum')
 
     # Optional raw-binary cache (CLAUDE_CODE_CACHE_DIR): skip the multi-MB
     # download on reinstalls / version rollbacks — handy on slow or metered
@@ -98,8 +101,8 @@ fetch() {
     tmp=$(mktemp)
     trap 'rm -f "$tmp"' EXIT
 
-    if [ -n "$cache" ] && [ -f "$cache" ] \
-       && [ "$(sha256sum "$cache" | cut -d' ' -f1)" = "$checksum" ]; then
+    if [ -n "$cache" ] && [ -f "$cache" ] &&
+      [ "$(sha256sum "$cache" | cut -d' ' -f1)" = "$checksum" ]; then
       log "Using cached Claude Code $version ($PLATFORM)."
       cp "$cache" "$tmp"
     else
@@ -107,8 +110,8 @@ fetch() {
       "${CURL[@]}" "$DL_BASE/$version/$PLATFORM/claude" -o "$tmp"
       local actual
       actual=$(sha256sum "$tmp" | cut -d' ' -f1)
-      [ "$actual" = "$checksum" ] \
-        || die "checksum mismatch for $PLATFORM: expected $checksum, got $actual"
+      [ "$actual" = "$checksum" ] ||
+        die "checksum mismatch for $PLATFORM: expected $checksum, got $actual"
       # Save the verified raw bytes for next time.
       if [ -n "$cache" ]; then
         mkdir -p "$CLAUDE_CODE_CACHE_DIR"
@@ -141,28 +144,28 @@ fetch() {
 
 mode="${1:-ensure}"
 case "$mode" in
-  ensure)
-    [ -x "$CURRENT" ] || fetch "$(resolve_version)"
-    ;;
-  update)
-    # Resolve the target version and re-fetch only when it differs from the
-    # installed one (the `current` symlink points at `claude-<version>`). The
-    # version check is a single cheap request; the multi-MB download and patch
-    # happen only on an actual change, so this is safe to run unattended on a
-    # schedule. Use --force to re-apply the same version (e.g. repair).
-    v="$(resolve_version)"
-    if [ "$(readlink "$CURRENT" 2>/dev/null)" = "claude-$v" ]; then
-      log "Claude Code $v already current."
-    else
-      fetch "$v"
-    fi
-    ;;
-  --force|force)
-    v="$(resolve_version)"
-    rm -f "$OPT_DIR/claude-$v" "$CURRENT"
+ensure)
+  [ -x "$CURRENT" ] || fetch "$(resolve_version)"
+  ;;
+update)
+  # Resolve the target version and re-fetch only when it differs from the
+  # installed one (the `current` symlink points at `claude-<version>`). The
+  # version check is a single cheap request; the multi-MB download and patch
+  # happen only on an actual change, so this is safe to run unattended on a
+  # schedule. Use --force to re-apply the same version (e.g. repair).
+  v="$(resolve_version)"
+  if [ "$(readlink "$CURRENT" 2>/dev/null)" = "claude-$v" ]; then
+    log "Claude Code $v already current."
+  else
     fetch "$v"
-    ;;
-  *)
-    die "usage: bootstrap.sh [ensure|update|--force]"
-    ;;
+  fi
+  ;;
+--force | force)
+  v="$(resolve_version)"
+  rm -f "$OPT_DIR/claude-$v" "$CURRENT"
+  fetch "$v"
+  ;;
+*)
+  die "usage: bootstrap.sh [ensure|update|--force]"
+  ;;
 esac

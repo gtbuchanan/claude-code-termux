@@ -1,0 +1,3 @@
+# 100-col line length, matching the shared gtbuchanan/tooling convention
+# (a compromise between full-screen monitors and narrower splits).
+line-length = 100
