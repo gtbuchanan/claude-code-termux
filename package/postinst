@@ -19,51 +19,51 @@ WRAPPER="$PREFIX/bin/claude"
 NATIVE_LINK="$HOME/.local/bin/claude"
 
 case "$1" in
-  configure)
-    # Required keys:
-    #   env.LD_PRELOAD — re-arms termux-exec for SUBPROCESSES so
-    #                    #!/usr/bin/env shebangs (pnpm, npx, …) resolve. It is
-    #                    applied after ld.so finishes with claude, so it never
-    #                    crashes claude itself.
-    #   autoUpdates    — false, so the in-session updater never overwrites the
-    #                    ELF-patched binary with a stock glibc one that won't exec.
-    if [ -z "${CLAUDE_CODE_SKIP_SETTINGS:-}" ] && command -v jq >/dev/null 2>&1; then
-      mkdir -p "$(dirname "$SETTINGS")"
-      [ -f "$SETTINGS" ] || printf '{}\n' > "$SETTINGS"
-      tmp=$(mktemp)
-      if jq --arg preload "$TERMUX_EXEC_LIB" '
+configure)
+  # Required keys:
+  #   env.LD_PRELOAD — re-arms termux-exec for SUBPROCESSES so
+  #                    #!/usr/bin/env shebangs (pnpm, npx, …) resolve. It is
+  #                    applied after ld.so finishes with claude, so it never
+  #                    crashes claude itself.
+  #   autoUpdates    — false, so the in-session updater never overwrites the
+  #                    ELF-patched binary with a stock glibc one that won't exec.
+  if [ -z "${CLAUDE_CODE_SKIP_SETTINGS:-}" ] && command -v jq >/dev/null 2>&1; then
+    mkdir -p "$(dirname "$SETTINGS")"
+    [ -f "$SETTINGS" ] || printf '{}\n' >"$SETTINGS"
+    tmp=$(mktemp)
+    if jq --arg preload "$TERMUX_EXEC_LIB" '
             .autoUpdates = false
           | .env = ((.env // {}) + {LD_PRELOAD: $preload})
-        ' "$SETTINGS" > "$tmp" 2>/dev/null; then
-        mv "$tmp" "$SETTINGS"
-      else
-        rm -f "$tmp"
-        echo "claude-code-termux: could not merge $SETTINGS; leaving it unchanged." >&2
-      fi
-    fi
-    # Symlink the launcher onto Anthropic's native-install path
-    # (~/.local/bin/claude). Claude's health check treats installMethod=native
-    # as a fatal error when this path is missing or invalid; pointing it at the
-    # launcher — not the patched binary directly — keeps the
-    # TMPDIR/LD_PRELOAD/argv[0] setup intact. autoUpdates=false (merged above)
-    # stops the native self-updater from clobbering it with a stock glibc build.
-    # Only created when the path is free or already a symlink — a user-managed
-    # regular file there is left untouched.
-    if [ -L "$NATIVE_LINK" ] || [ ! -e "$NATIVE_LINK" ]; then
-      mkdir -p "$(dirname "$NATIVE_LINK")"
-      ln -sfn "$WRAPPER" "$NATIVE_LINK"
+        ' "$SETTINGS" >"$tmp" 2>/dev/null; then
+      mv "$tmp" "$SETTINGS"
     else
-      echo "claude-code-termux: $NATIVE_LINK exists and is not a symlink; leaving it unchanged." >&2
+      rm -f "$tmp"
+      echo "claude-code-termux: could not merge $SETTINGS; leaving it unchanged." >&2
     fi
+  fi
+  # Symlink the launcher onto Anthropic's native-install path
+  # (~/.local/bin/claude). Claude's health check treats installMethod=native
+  # as a fatal error when this path is missing or invalid; pointing it at the
+  # launcher — not the patched binary directly — keeps the
+  # TMPDIR/LD_PRELOAD/argv[0] setup intact. autoUpdates=false (merged above)
+  # stops the native self-updater from clobbering it with a stock glibc build.
+  # Only created when the path is free or already a symlink — a user-managed
+  # regular file there is left untouched.
+  if [ -L "$NATIVE_LINK" ] || [ ! -e "$NATIVE_LINK" ]; then
+    mkdir -p "$(dirname "$NATIVE_LINK")"
+    ln -sfn "$WRAPPER" "$NATIVE_LINK"
+  else
+    echo "claude-code-termux: $NATIVE_LINK exists and is not a symlink; leaving it unchanged." >&2
+  fi
 
-    # Download + patch the binary now (network). Best-effort: if it fails
-    # (e.g. offline at install), the user can run claude-code-termux-update.
-    if "$BOOTSTRAP" ensure; then
-      echo "claude-code-termux: ready — run 'claude'." >&2
-    else
-      echo "claude-code-termux: binary not fetched (offline?). Run 'claude-code-termux-update' when online." >&2
-    fi
-    ;;
+  # Download + patch the binary now (network). Best-effort: if it fails
+  # (e.g. offline at install), the user can run claude-code-termux-update.
+  if "$BOOTSTRAP" ensure; then
+    echo "claude-code-termux: ready — run 'claude'." >&2
+  else
+    echo "claude-code-termux: binary not fetched (offline?). Run 'claude-code-termux-update' when online." >&2
+  fi
+  ;;
 esac
 
 exit 0
