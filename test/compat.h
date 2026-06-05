@@ -22,9 +22,7 @@ static int setenv(const char *name, const char *value, int overwrite) {
 }
 
 /* _putenv_s(name, "") removes the variable on Windows (getenv → NULL). */
-static int unsetenv(const char *name) {
-  return _putenv_s(name, "");
-}
+static int unsetenv(const char *name) { return _putenv_s(name, ""); }
 #endif /* _WIN32 */
 
 #endif /* CLAUDE_WRAPPER_TEST_COMPAT_H */

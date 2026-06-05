@@ -29,7 +29,7 @@ case "${OSTYPE:-}" in msys* | cygwin* | win*) bin="$bin.exe" ;; esac
 # POSIX setenv/unsetenv on Linux/macOS, where compat.h is a no-op).
 # -DCLAUDE_WRAPPER_NO_MAIN drops the wrapper's main() (greatest supplies one);
 # -include compat.h shims setenv/unsetenv on Windows.
-zig cc -O2 -Wall -Wextra \
+zig cc -O2 -Wall -Wextra -Werror \
   -DBINARY="\"$BINARY\"" -DTMPDIR_PATH="\"$TMPDIR_PATH\"" \
   -DCLAUDE_WRAPPER_NO_MAIN \
   -include "$MISE_PROJECT_ROOT/test/compat.h" \

@@ -25,11 +25,12 @@ int claude_wrapper_run(int argc, char **argv,
 
 /* --- Recording exec stub --------------------------------------------------- */
 
-static int    exec_calls;
-static char  *exec_path;
-static char  *exec_argv[64];
-static int    exec_argc;
-static int    exec_retval;   /* what the stub returns (real exec only returns on failure) */
+static int exec_calls;
+static char *exec_path;
+static char *exec_argv[64];
+static int exec_argc;
+/* what the stub returns (real exec only returns on failure) */
+static int exec_retval;
 
 static int recording_exec(const char *path, char *const argv[]) {
   exec_calls++;
@@ -51,7 +52,7 @@ static void reset_fixture(void) {
   }
   exec_calls = 0;
   exec_argc = 0;
-  exec_retval = -1;   /* default: pretend exec failed so the wrapper returns */
+  exec_retval = -1; /* default: pretend exec failed so the wrapper returns */
   free(exec_path);
   exec_path = NULL;
   unsetenv("TMPDIR");
@@ -79,7 +80,7 @@ TEST preserves_argv_and_execs_baked_in_binary(void) {
   ASSERT_EQ_FMT(1, exec_calls, "%d");
   ASSERT_STR_EQ(BINARY, exec_path);
   ASSERT_EQ_FMT(3, exec_argc, "%d");
-  ASSERT_STR_EQ("ugrep", exec_argv[0]);    /* argv[0] preserved → tool dispatch */
+  ASSERT_STR_EQ("ugrep", exec_argv[0]); /* argv[0] preserved → tool dispatch */
   ASSERT_STR_EQ("-G", exec_argv[1]);
   ASSERT_STR_EQ("needle", exec_argv[2]);
   PASS();
