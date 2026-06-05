@@ -54,7 +54,8 @@ int claude_wrapper_run(int argc, char **argv,
   (void)setenv("CLAUDE_CODE_TMPDIR", TMPDIR_PATH, 0);
   (void)unsetenv("LD_PRELOAD");
   exec(BINARY, argv);
-  fprintf(stderr, "claude wrapper: execv %s failed: %s\n", BINARY, strerror(errno));
+  fprintf(stderr, "claude wrapper: execv %s failed: %s\n", BINARY,
+          strerror(errno));
   return 127;
 }
 

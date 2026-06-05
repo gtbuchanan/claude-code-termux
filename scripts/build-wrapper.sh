@@ -20,7 +20,7 @@ out="$root/artifacts/build"
 mkdir -p "$out"
 
 : "${CC:=cc}"
-"$CC" -O2 -Wall -Wextra -DBINARY="\"$BINARY\"" -DTMPDIR_PATH="\"$TMPDIR_PATH\"" \
+"$CC" -O2 -Wall -Wextra -Werror -DBINARY="\"$BINARY\"" -DTMPDIR_PATH="\"$TMPDIR_PATH\"" \
   -o "$out/claude" "$root/src/claude-wrapper.c"
 
 echo "$out/claude"
