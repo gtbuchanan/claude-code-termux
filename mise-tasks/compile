@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+#MISE description="Compile the launcher + assemble the .deb"
+#
+# Produces artifacts/packages/*.deb. The whole compile runs in a Termux
+# environment: on a Termux device that's native (scripts/compile.sh); on a dev
+# host we obtain one via termux-docker (scripts/docker-run.sh). An optional
+# version arg is forwarded (empty → scripts/version.sh derives the CalVer).
+set -euo pipefail
+
+if [ "$(uname -o 2>/dev/null)" = "Android" ]; then
+  exec bash scripts/compile.sh "$@"
+else
+  exec bash scripts/docker-run.sh compile.sh "$@"
+fi

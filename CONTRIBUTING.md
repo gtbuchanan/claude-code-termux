@@ -37,23 +37,29 @@ The dev workflow runs through file-based mise tasks in `mise-tasks/`:
 - `mise run pre-commit:{staged,pr,all}` — run the prek hooks
   (`.pre-commit-config.yaml`) scoped to staged changes, this branch vs
   `origin/main`, or all files. Append `-- <hook-id>` to target one hook.
-- `mise run build [version]` — the full pipeline: compile the launcher, assemble
-  the `.deb`, install it via the real `install.sh`, and assert every fix.
-  `version` is optional; empty derives the local CalVer (`scripts/version.sh`,
-  run number `0`).
+- `mise run check` — the fast local gate: the prek hooks plus the C launcher
+  unit tests (`test:fast`). No Docker.
+- `mise run compile [version]` — compile the launcher and assemble the `.deb`
+  (→ `artifacts/packages/`). `version` is optional; empty derives the local
+  CalVer (`scripts/version.sh`, run number `0`).
+- `mise run test:e2e` — install the prebuilt `.deb` (run `compile` first) via
+  the real `install.sh` and assert every fix.
+- `mise run build` — run everything: `check`, then `compile`, then `test:e2e`.
+  The canonical pre-PR check.
 
 ## Building and testing
 
-`mise run build` is the canonical pre-PR check. The package is hand-assembled
-and the build + install + assertions all run **in a Termux environment** — it
-needs Termux's clang + bionic for the C launcher. One rule, two ways in:
+`mise run build` is the canonical pre-PR check — it runs `check`, compiles the
+`.deb`, then runs the e2e test against it. The package is hand-assembled and the
+compile + install + assertions all run **in a Termux environment** — it needs
+Termux's clang + bionic for the C launcher. One rule, two ways in:
 
-- **On a Termux/Android device** — `build` runs `scripts/test.sh` natively
-  (`pkg install clang dpkg` first).
-- **On a dev host** (Windows/macOS/Linux, any arch) — `build` runs
-  `scripts/test-docker.sh`, which spins up `termux-docker` and runs the same
-  `scripts/test.sh` inside it. Native on arm64 hosts, under QEMU elsewhere. CI
-  runs the same thing on a native arm64 runner.
+- **On a Termux/Android device** — the `compile` / `test:e2e` tasks run
+  `scripts/compile.sh` / `scripts/e2e.sh` natively.
+- **On a dev host** (Windows/macOS/Linux, any arch) — they run via
+  `scripts/docker-run.sh`, which spins up `termux-docker` and runs the script
+  inside it. Native on arm64 hosts, under QEMU elsewhere. CI runs the same tasks
+  on a native arm64 runner.
 
 The output `.deb` lands in `artifacts/packages/` (git-ignored). It contains
 **none of Anthropic's bytes** — the Claude Code binary is downloaded and patched
