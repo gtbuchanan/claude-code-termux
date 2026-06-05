@@ -1,42 +1,56 @@
 #!/data/data/com.termux/files/usr/bin/bash
 #
-# Runs INSIDE termux/termux-docker:aarch64. Compiles the launcher wrapper with
-# Termux's own clang, builds the .deb, installs it via install.sh (exercising
-# real dependency resolution), and tests the behaviors this package fixes. Set
-# TEST_RUN_CLAUDE=1 to exec the patched binary (grep/find dispatch, startup).
-# Invoked from the repo root (CI and scripts/test-docker.sh).
+# Runs INSIDE termux/termux-docker:aarch64 (or natively on a Termux device).
+# Installs the prebuilt .deb via install.sh (exercising real dependency
+# resolution) and tests the behaviors this package fixes — the e2e half of the
+# pipeline. The compile half (wrapper + .deb) lives in scripts/compile.sh and
+# must run first.
 #
-#   bash scripts/test.sh <version>
+#   bash scripts/e2e.sh [version]   # empty → version.sh derives the CalVer
 #
 set -euxo pipefail
 
-VERSION="${1:-$(bash "$(dirname "$0")/version.sh")}"
+# Resolve paths against the repo root regardless of the caller's cwd: install.sh
+# and the prebuilt .deb are looked up relative to it.
+cd "$(dirname "$0")/.."
+
+VERSION="${1:-$(bash scripts/version.sh)}"
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 
-# --- Build toolchain (CI-only) ---------------------------------------------
-# A fresh termux-docker has no mirror selected; `pkg update` picks one. Then
-# install the build-time tools (NOT package deps): C compiler + packaging tool.
-pkg update
-apt-get install -y clang dpkg
-
-# --- Build -----------------------------------------------------------------
-# Build under Termux's restrictive default umask (077) to prove build-deb.sh
-# normalizes it — termux-docker runs at 022, which masked a real-device dpkg-deb
-# failure (0700 DEBIAN control dir, outside the allowed 0755..0775). Scoped to a
-# subshell so the install + assert phases below run at the inherited umask,
-# exactly as a user's install does (dpkg restores packaged file modes anyway).
-(
-  umask 077
-  CC=clang ./scripts/build-wrapper.sh
-  ./scripts/build-deb.sh "$VERSION"
-)
+# --- e2e toolchain ----------------------------------------------------------
+# The TMPDIR-injection assertion below compiles a tiny variant of the wrapper,
+# so the e2e needs clang even though it doesn't assemble the .deb. Install it
+# only when absent (a fresh termux-docker has no apt mirror, so pick one first;
+# a provisioned device skips straight through).
+if ! command -v clang >/dev/null; then
+  pkg update
+  apt-get install -y clang
+fi
 
 # --- Install via the real installer ----------------------------------------
-# Reuse install.sh (the single install path) against the freshly built .deb, so
-# CI exercises the actual installer: glibc-repo enablement + apt dependency
-# resolution. Settings are merged (not skipped) so we can verify them below.
-deb=$(ls "$PWD"/artifacts/packages/*.deb)
-CLAUDE_CODE_DEB="$deb" bash install.sh
+# Reuse install.sh (the single install path) against the .deb that compile.sh
+# produced, so CI exercises the actual installer: glibc-repo enablement + apt
+# dependency resolution. Settings are merged (not skipped) so we verify them
+# below.
+shopt -s nullglob
+# Absolute path: apt-get install only treats an argument as a local file (not a
+# package name) when it's a path it can resolve; a bare relative path fails.
+debs=("$PWD"/artifacts/packages/*.deb)
+case "${#debs[@]}" in
+0)
+  echo "error: no .deb in artifacts/packages — run 'mise run compile' first." >&2
+  exit 1
+  ;;
+1) ;;
+# artifacts/ persists across runs and compile doesn't purge it, so stale builds
+# would make the choice ambiguous — fail rather than guess.
+*)
+  echo "error: multiple .debs in artifacts/packages; expected one:" >&2
+  printf '  %s\n' "${debs[@]}" >&2
+  exit 1
+  ;;
+esac
+CLAUDE_CODE_DEB="${debs[0]}" bash install.sh
 
 # --- Layout assertions -----------------------------------------------------
 elf_magic() { od -An -tx1 -N4 "$1" | tr -d ' \n'; }

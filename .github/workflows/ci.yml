@@ -35,44 +35,41 @@ jobs:
           persist-credentials: false
       - uses: gtbuchanan/tooling/.github/actions/mise-setup@main
       # -v lists each test by name in the log (default is a compact summary).
-      - run: mise run test:wrapper -- -v
+      - run: mise run test:fast -- -v
 
-  termux:
-    # Native arm64 runner (free for public repos): the aarch64 container runs
-    # at native speed, no QEMU emulation needed.
+  # Native arm64 runner (free for public repos) → the aarch64 container runs
+  # without QEMU. Split into two jobs so a compile break and an install/behavior
+  # break surface separately.
+  compile:
+    name: Compile
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - name: Build, install + test in termux-docker
-        env:
-          CLAUDE_CODE_VERSION: ${{ inputs.claude_version }}
-        run: |
-          set -eu
-          mkdir -p artifacts/packages && chmod 777 artifacts/packages
-          # termux-docker's entrypoint drops privileges and sanitizes the
-          # environment, so `docker run -e` never reaches the command. Pass the
-          # run number (version.sh's CalVer input) and the Claude Code version
-          # to test (empty = latest) as positional args to a single-quoted
-          # script instead — nothing from the host is interpolated into the
-          # container command.
-          docker run --rm --privileged \
-            -v "$PWD:/src:ro" -v "$PWD/artifacts/packages:/out" \
-            termux/termux-docker:aarch64 \
-            bash -c '
-              set -eu
-              cp -r /src ~/work && cd ~/work
-              # Ephemeral cache dir: exercises the CLAUDE_CODE_CACHE_DIR path
-              # (the forced-update cache-hit assertion) within this run, at no
-              # extra download. Not persisted — CI re-downloads each run.
-              GITHUB_RUN_NUMBER="$1" CLAUDE_CODE_VERSION="$2" \
-                CLAUDE_CODE_CACHE_DIR="$HOME/cc-cache" bash scripts/test.sh
-              cp ~/work/artifacts/packages/*.deb /out/
-            ' termux-test "$GITHUB_RUN_NUMBER" "$CLAUDE_CODE_VERSION"
+      - uses: gtbuchanan/tooling/.github/actions/mise-setup@main
+      - run: mise run compile
       - name: Upload .deb
         uses: actions/upload-artifact@v7
         with:
           name: deb
           path: artifacts/packages/*.deb
           if-no-files-found: error
+
+  e2e:
+    name: E2E Test
+    needs: compile
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: gtbuchanan/tooling/.github/actions/mise-setup@main
+      - name: Download the compiled .deb
+        uses: actions/download-artifact@v8
+        with:
+          name: deb
+          path: artifacts/packages
+      - env:
+          CLAUDE_CODE_VERSION: ${{ inputs.claude_version }}
+        run: mise run test:e2e

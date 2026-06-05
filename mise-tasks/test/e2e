@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+#MISE description="E2E test: install the prebuilt .deb + assert the fixes"
+#MISE wait_for=["compile"]
+#
+# Installs the .deb from artifacts/packages (run `mise run compile` first) and
+# asserts the fixes. The whole e2e runs in a Termux environment: on a Termux
+# device that's native (scripts/e2e.sh); on a dev host we obtain one via
+# termux-docker (scripts/docker-run.sh). An optional version arg is forwarded.
+set -euo pipefail
+
+if [ "$(uname -o 2>/dev/null)" = "Android" ]; then
+  exec bash scripts/e2e.sh "$@"
+else
+  exec bash scripts/docker-run.sh e2e.sh "$@"
+fi

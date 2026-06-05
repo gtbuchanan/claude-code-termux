@@ -61,8 +61,9 @@ publish the binary; the `.deb` contains no Anthropic bytes.
 | `vendor/greatest.h` | Vendored single-header test framework (greatest 1.5.0, ISC; from silentbicycle/greatest). Excluded from prek. |
 | `scripts/build-wrapper.sh` | Compile the wrapper with Termux's clang. |
 | `scripts/build-deb.sh` | Stage + `dpkg-deb --build` → `artifacts/packages/`. |
-| `scripts/test.sh` | Build + install + assert the fixes, inside termux-docker. |
-| `scripts/test-docker.sh` | Run `test.sh` on your machine via Docker (QEMU off-arm64). |
+| `scripts/compile.sh` | Compile the wrapper + assemble the `.deb`, in a Termux env. |
+| `scripts/e2e.sh` | Install the prebuilt `.deb` + assert the fixes, in a Termux env. |
+| `scripts/docker-run.sh` | Run a termux-side script (`compile.sh`/`e2e.sh`) on your machine via Docker (QEMU off-arm64). |
 | `scripts/version.sh` | Prints the version (see Versioning). |
 | `mise.toml` | Host-side dev-tool pins + `lockfile = true`. Tasks live in `mise-tasks/`. |
 | `.pre-commit-config.yaml` | prek hook definitions — the source of truth for the lint hooks. |
@@ -79,14 +80,20 @@ hosts and the Linux CI runner.
 - `mise run pre-commit:{staged,pr,all}` — run the prek hooks (see
   `.pre-commit-config.yaml`) scoped to staged changes, this branch vs
   `origin/main`, or all files. Append `-- <hook-id>` to target one hook.
-- `mise run test:wrapper` — fast, host-native unit tests for the C launcher:
+- `mise run test:fast` — fast, host-native unit tests for the C launcher:
   compiles `src/claude-wrapper.c` with mise's `zig` and runs it directly (no
   Termux/Docker), in milliseconds. Append `-- -v` for per-test greatest output.
-- `mise run check` — everything a PR is gated on locally: the prek hooks
-  (`pre-commit:all`) plus the launcher unit tests (`test:wrapper`).
-- `mise run build [version]` — the full pipeline (compile + package + install +
-  assert), env-aware: `scripts/test.sh` natively on a Termux device, else
-  `scripts/test-docker.sh` (the container) on a dev host. See Building & packaging.
+- `mise run check` — the fast local gate: the prek hooks (`pre-commit:all`) plus
+  the launcher unit tests (`test:fast`). No Docker.
+- `mise run compile [version]` — compile the launcher + assemble the `.deb`
+  (→ `artifacts/packages/`), env-aware: `scripts/compile.sh` natively on a Termux
+  device, else `scripts/docker-run.sh` (the container) on a dev host.
+- `mise run test:e2e [version]` — install the prebuilt `.deb` and assert the
+  fixes; requires a prior `mise run compile`. Same Termux-or-Docker envelope as
+  `compile`.
+- `mise run build` — run everything: `check`, `compile`, then `test:e2e` (which
+  `wait_for`s `compile`, so it lands against a fresh `.deb`). The canonical
+  pre-PR pipeline. See Building & packaging.
 
 CI runs the hooks through the shared
 `gtbuchanan/tooling/.github/workflows/pre-commit.yml` reusable workflow (which
@@ -107,30 +114,32 @@ Termux's clang + bionic for the wrapper; runs natively on arm64 hosts, under
 QEMU on x86 dev hosts): `build-wrapper.sh` compiles the
 launcher → `build-deb.sh` stages the payload under the Termux prefix and runs
 `dpkg-deb --build`. Output goes to `artifacts/{build,packages}` (git-ignored).
-The version is passed in by the caller; `build-deb.sh`/`test.sh` default to
-`scripts/version.sh`.
+The version is passed in by the caller; `build-deb.sh`, `compile.sh`, and
+`e2e.sh` default to `scripts/version.sh`.
 
 ## Testing locally
 
 Two layers. The launcher's logic (env shaping + the exec handoff) has fast
-**unit tests** that run anywhere via `mise run test:wrapper` — no Termux, no
+**unit tests** that run anywhere via `mise run test:fast` — no Termux, no
 Docker (see Dev environment). The end-to-end behaviors (real binary, dispatch,
-install) need the container:
+install) need the container, split across two tasks:
 
-`scripts/test-docker.sh [version]` pulls `termux/termux-docker:aarch64` and runs
-`scripts/test.sh` in it — natively on arm64 hosts, under QEMU elsewhere (needs
-Docker + `binfmt`). `test.sh` builds the
-`.deb`, installs it via `install.sh`, and asserts the real fixes: `argv[0]=rg`/
-`bfs` dispatch to the embedded ripgrep/bfs, `LD_PRELOAD`-cleared startup,
-`TMPDIR` injection, the `settings.json` merge, and the conditional/cached update
-paths.
+`mise run compile` produces the `.deb`, then `mise run test:e2e` installs it via
+`install.sh` and asserts the real fixes: `argv[0]=rg`/`bfs` dispatch to the
+embedded ripgrep/bfs, `LD_PRELOAD`-cleared startup, `TMPDIR` injection, the
+`settings.json` merge, and the conditional/cached update paths. On a dev host
+both dispatch to `scripts/docker-run.sh <script>`, which pulls
+`termux/termux-docker:aarch64` and runs the script in it — natively on arm64
+hosts, under QEMU elsewhere (needs Docker + `binfmt`). It bind-mounts
+`artifacts/` writable over the read-only source, so the `.deb` `compile`
+produces is visible to a later `test:e2e`.
 
-For local speed, `test-docker.sh` mounts gitignored host caches under
+For local speed, `docker-run.sh` also mounts gitignored host caches under
 `artifacts/cache/` — the Termux **apt archive** cache (so build/runtime `.deb`s
 aren't re-downloaded; apt still fully installs + resolves) and a **`claude`**
 binary cache via `CLAUDE_CODE_CACHE_DIR` (raw pre-patch bytes; `patchelf` + the
-execPath patch still run). CI skips the caches (native arm64 + fast link) but
-sets an ephemeral `CLAUDE_CODE_CACHE_DIR` so the cache-hit path is still tested.
+execPath patch still run). In CI the cache dirs start empty per checkout, so the
+cache-hit path is still exercised within a run without persisting across runs.
 
 **termux-docker gotcha:** its entrypoint drops privileges and **sanitizes the
 environment**, so `docker run -e VAR=…` does **not** reach the command — set env
@@ -141,14 +150,17 @@ vars **inline** in the `bash -c` string instead.
 - **`ci.yml`** (`pull_request` + `workflow_call`): a `pre-commit` job that calls
   the shared `tooling/.github/workflows/pre-commit.yml` reusable (PR-only — the
   reusable diffs against the PR base, so it's skipped on push/schedule
-  `workflow_call` invocations); a `unit` job that runs `mise run test:wrapper`
+  `workflow_call` invocations); a `unit` job that runs `mise run test:fast`
   (the launcher unit tests build + run natively via `zig` — no container, fast,
-  arch-independent); plus the termux build/test job, which builds +
-  installs + tests the `.deb` once and uploads it as an artifact. Runs on a
-  **native arm64** runner
+  arch-independent); plus the `compile` and `e2e` jobs. `compile` runs `mise run
+  compile` and uploads the `.deb` as an artifact; `e2e` (`needs: compile`)
+  downloads it and runs `mise run test:e2e` — so a compile break and an
+  install/behavior break surface as distinct job failures. Both go through the
+  same mise tasks (→ `scripts/docker-run.sh`) a dev host uses, so the container
+  plumbing lives in one place. They run on a **native arm64** runner
   (`ubuntu-24.04-arm`) — no QEMU, so the aarch64 container runs natively. The
   `workflow_call` `claude_version` input (empty = latest) pins which Claude
-  Code version the test installs.
+  Code version `e2e` installs.
 - **`release-watch.yml`** (`schedule: daily` + `workflow_dispatch`): polls
   Anthropic's release channel (the endpoint `bootstrap.sh` resolves against),
   and on a **new** version — gated by an `actions/cache` key per version so it
