@@ -24,6 +24,17 @@ jobs:
     # use-pnpm defaults to false: this repo is node-free, so prek runs alone.
     uses: gtbuchanan/tooling/.github/workflows/pre-commit.yml@main
 
+  unit:
+    name: Unit Tests
+    # The C launcher's logic is pure POSIX, so its unit tests build + run
+    # natively via mise's zig in seconds — no Termux/Docker.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: gtbuchanan/tooling/.github/actions/mise-setup@main
+      # -v lists each test by name in the log (default is a compact summary).
+      - run: mise run test:wrapper -- -v
+
   termux:
     # Native arm64 runner (free for public repos): the aarch64 container runs
     # at native speed, no QEMU emulation needed.

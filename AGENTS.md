@@ -55,7 +55,10 @@ publish the binary; the `.deb` contains no Anthropic bytes.
 | `package/payload/libexec/bootstrap.sh` | Resolve / download (`curl --retry`, optional `CLAUDE_CODE_CACHE_DIR`) / verify / `patchelf` / execPath-patch engine. |
 | `package/payload/libexec/patch-execpath.py` | The `CLAUDE_CODE_EXECPATH` patch. |
 | `package/payload/etc/claude-code-termux.conf` | `CLAUDE_CODE_VERSION` pin + `CLAUDE_CODE_CACHE_DIR` (both empty by default). |
-| `src/claude-wrapper.c` | The C launcher (`-DBINARY=` baked in at compile). |
+| `src/claude-wrapper.c` | The C launcher (`-DBINARY=` baked in at compile). `claude_wrapper_run()` takes its exec function as a parameter — a seam the unit tests fake. |
+| `test/wrapper_test.c` | Unit tests for the launcher (greatest; recording exec stub). |
+| `test/compat.h` | Test-only `setenv`/`unsetenv` shims for Windows libc; force-included into the test build, never shipped. |
+| `vendor/greatest.h` | Vendored single-header test framework (greatest 1.5.0, ISC; from silentbicycle/greatest). Excluded from prek. |
 | `scripts/build-wrapper.sh` | Compile the wrapper with Termux's clang. |
 | `scripts/build-deb.sh` | Stage + `dpkg-deb --build` → `artifacts/packages/`. |
 | `scripts/test.sh` | Build + install + assert the fixes, inside termux-docker. |
@@ -76,6 +79,11 @@ hosts and the Linux CI runner.
 - `mise run pre-commit:{staged,pr,all}` — run the prek hooks (see
   `.pre-commit-config.yaml`) scoped to staged changes, this branch vs
   `origin/main`, or all files. Append `-- <hook-id>` to target one hook.
+- `mise run test:wrapper` — fast, host-native unit tests for the C launcher:
+  compiles `src/claude-wrapper.c` with mise's `zig` and runs it directly (no
+  Termux/Docker), in milliseconds. Append `-- -v` for per-test greatest output.
+- `mise run check` — everything a PR is gated on locally: the prek hooks
+  (`pre-commit:all`) plus the launcher unit tests (`test:wrapper`).
 - `mise run build [version]` — the full pipeline (compile + package + install +
   assert), env-aware: `scripts/test.sh` natively on a Termux device, else
   `scripts/test-docker.sh` (the container) on a dev host. See Building & packaging.
@@ -104,6 +112,11 @@ The version is passed in by the caller; `build-deb.sh`/`test.sh` default to
 
 ## Testing locally
 
+Two layers. The launcher's logic (env shaping + the exec handoff) has fast
+**unit tests** that run anywhere via `mise run test:wrapper` — no Termux, no
+Docker (see Dev environment). The end-to-end behaviors (real binary, dispatch,
+install) need the container:
+
 `scripts/test-docker.sh [version]` pulls `termux/termux-docker:aarch64` and runs
 `scripts/test.sh` in it — natively on arm64 hosts, under QEMU elsewhere (needs
 Docker + `binfmt`). `test.sh` builds the
@@ -128,7 +141,9 @@ vars **inline** in the `bash -c` string instead.
 - **`ci.yml`** (`pull_request` + `workflow_call`): a `pre-commit` job that calls
   the shared `tooling/.github/workflows/pre-commit.yml` reusable (PR-only — the
   reusable diffs against the PR base, so it's skipped on push/schedule
-  `workflow_call` invocations) plus the termux build/test job, which builds +
+  `workflow_call` invocations); a `unit` job that runs `mise run test:wrapper`
+  (the launcher unit tests build + run natively via `zig` — no container, fast,
+  arch-independent); plus the termux build/test job, which builds +
   installs + tests the `.deb` once and uploads it as an artifact. Runs on a
   **native arm64** runner
   (`ubuntu-24.04-arm`) — no QEMU, so the aarch64 container runs natively. The

@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+#MISE description="Unit-test the C launcher natively (fast; no Docker)"
+#
+# Compiles src/claude-wrapper.c with zig and runs it directly — no Termux, no
+# Docker, milliseconds. The wrapper is pure POSIX env-shaping plus an injected
+# exec handoff (the seam in claude-wrapper.c), so a native build exercises the
+# real logic.
+#
+#   mise run test:wrapper [-- greatest args, e.g. -v]
+#
+set -euo pipefail
+
+# Keep Git Bash / MSYS from rewriting the leading-slash sentinel paths below
+# into Windows paths when they pass through to zig (no-op on other hosts).
+export MSYS_NO_PATHCONV=1
+
+# Sentinel literals baked into the build so the test can assert the exact
+# path/tmpdir the wrapper bakes in. They need not exist on disk: exec is faked.
+BINARY=/claude-code-termux-test/claude
+TMPDIR_PATH=/claude-code-termux-test/tmp
+
+out="$MISE_PROJECT_ROOT/artifacts/build"
+mkdir -p "$out"
+
+bin="$out/wrapper_test"
+case "${OSTYPE:-}" in msys* | cygwin* | win*) bin="$bin.exe" ;; esac
+
+# Flags mirror build-wrapper.sh (notably no -std: the default gnu mode exposes
+# POSIX setenv/unsetenv on Linux/macOS, where compat.h is a no-op).
+# -DCLAUDE_WRAPPER_NO_MAIN drops the wrapper's main() (greatest supplies one);
+# -include compat.h shims setenv/unsetenv on Windows.
+zig cc -O2 -Wall -Wextra \
+  -DBINARY="\"$BINARY\"" -DTMPDIR_PATH="\"$TMPDIR_PATH\"" \
+  -DCLAUDE_WRAPPER_NO_MAIN \
+  -include "$MISE_PROJECT_ROOT/test/compat.h" \
+  -I "$MISE_PROJECT_ROOT/vendor" \
+  -o "$bin" \
+  "$MISE_PROJECT_ROOT/src/claude-wrapper.c" "$MISE_PROJECT_ROOT/test/wrapper_test.c"
+
+"$bin" "$@"

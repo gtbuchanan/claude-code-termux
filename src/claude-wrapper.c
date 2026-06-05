@@ -29,7 +29,16 @@
 #error "TMPDIR_PATH must be defined at compile time (-DTMPDIR_PATH=\"/…/tmp\")"
 #endif
 
-int main(int argc, char **argv) {
+/*
+ * The launch logic, with the exec call injected as a parameter so unit tests
+ * can substitute a fake and observe the (path, argv) handoff — and the env it
+ * shapes — without the real execv replacing the process. main() binds the real
+ * execv below; test/wrapper_test.c passes a recording stub. On the success path
+ * exec never returns; any return is a failure, so the error report follows it
+ * unconditionally.
+ */
+int claude_wrapper_run(int argc, char **argv,
+                       int (*exec)(const char *, char *const *)) {
   (void)argc;
   /* Termux has no writable /tmp (it's shell:shell 0771), so Claude's temp
      paths must land in the Termux prefix. Two env vars cover the env-honoring
@@ -44,7 +53,15 @@ int main(int argc, char **argv) {
   (void)setenv("TMPDIR", TMPDIR_PATH, 0);
   (void)setenv("CLAUDE_CODE_TMPDIR", TMPDIR_PATH, 0);
   (void)unsetenv("LD_PRELOAD");
-  execv(BINARY, argv);
+  exec(BINARY, argv);
   fprintf(stderr, "claude wrapper: execv %s failed: %s\n", BINARY, strerror(errno));
   return 127;
 }
+
+/* CLAUDE_WRAPPER_NO_MAIN lets the unit test link claude_wrapper_run() without
+   this entry point colliding with the test harness's own main(). */
+#ifndef CLAUDE_WRAPPER_NO_MAIN
+int main(int argc, char **argv) {
+  return claude_wrapper_run(argc, argv, execv);
+}
+#endif

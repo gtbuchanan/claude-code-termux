@@ -2,4 +2,7 @@
 #MISE description="Run the prek hooks on all files"
 set -euo pipefail
 
+# no-commit-to-branch guards real commits via the installed git hook; in a
+# manual all-files run it only adds noise (it inspects the branch, not files).
+export SKIP=no-commit-to-branch
 exec prek run --all-files "$@"

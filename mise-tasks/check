@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+#MISE description="Run all checks: prek hooks + C launcher unit tests"
+#MISE depends=["pre-commit:all", "test:wrapper"]
