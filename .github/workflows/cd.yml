@@ -20,7 +20,11 @@ jobs:
   # gates nor depends on the build.
   pre-commit:
     name: Pre-Commit
-    uses: gtbuchanan/tooling/.github/workflows/pre-commit-seed.yml@main
+    # Pinned to the last prek-based reusable (tooling#141), matching ci.yml,
+    # so it warms the prek cache key the PR build restores. @main migrated to
+    # hk (tooling#157), which this repo hasn't adopted yet. Bump to @main once
+    # we migrate to hk.
+    uses: gtbuchanan/tooling/.github/workflows/pre-commit-seed.yml@9a77ff5450826237f7a7250bb98e6010847d4521
 
   # Gated by the `release` environment (configure required reviewers in repo
   # settings → Environments → release). Publishes the exact .deb the ci job

@@ -22,7 +22,10 @@ jobs:
     # no base_ref — skip rather than hand prek empty --from-ref/--to-ref.
     if: github.event_name == 'pull_request'
     # use-pnpm defaults to false: this repo is node-free, so prek runs alone.
-    uses: gtbuchanan/tooling/.github/workflows/pre-commit.yml@main
+    # Pinned to the last prek-based reusable (tooling#141); @main migrated to
+    # hk (tooling#157) which this repo hasn't adopted yet. Bump to @main once
+    # we migrate to hk.
+    uses: gtbuchanan/tooling/.github/workflows/pre-commit.yml@9a77ff5450826237f7a7250bb98e6010847d4521
 
   unit:
     name: Unit Tests
