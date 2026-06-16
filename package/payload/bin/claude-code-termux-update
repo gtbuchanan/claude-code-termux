@@ -9,4 +9,10 @@
 # Pass --force to re-download and re-patch even when the version is unchanged
 # (e.g. to repair a corrupted binary or re-apply after a failed patch).
 #
-exec "${PREFIX:-/data/data/com.termux/files/usr}/libexec/claude-code-termux/bootstrap.sh" "${1:-update}"
+LIBEXEC="${PREFIX:-/data/data/com.termux/files/usr}/libexec/claude-code-termux"
+
+# Repair the native-install symlink (~/.local/bin/claude) if anything clobbered
+# it, then run the version-aware update/patch engine. Best-effort: never block
+# the update on the symlink reconcile.
+"$LIBEXEC/link-native.sh" || true
+exec "$LIBEXEC/bootstrap.sh" "${1:-update}"
