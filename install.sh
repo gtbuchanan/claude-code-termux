@@ -39,16 +39,43 @@ if [ -n "$deb" ]; then
   log "Installing local package $deb"
 else
   log "Resolving the latest release of $REPO…"
-  url=$(curl -fsSL "$API" |
-    grep -oE '"browser_download_url"[[:space:]]*:[[:space:]]*"[^"]*_aarch64\.deb"' |
+  api=$(curl -fsSL "$API") ||
+    die "could not reach the GitHub API (network down or rate limited)."
+  # Pull the .deb's download URL and its asset digest out of the release JSON.
+  # jq isn't a guaranteed dependency yet here (apt installs it later), so this
+  # stays grep/sed. `|| true`: a no-match grep exits 1, which under pipefail
+  # would abort; an absent value is handled by the checks below.
+  url=$(printf '%s' "$api" |
+    { grep -oE '"browser_download_url"[[:space:]]*:[[:space:]]*"[^"]*_aarch64\.deb"' || true; } |
     head -1 |
     sed -E 's/.*"(https[^"]+)"$/\1/')
-  [ -n "$url" ] || die "no aarch64 .deb asset found in the latest release."
+  [ -n "$url" ] ||
+    die "no aarch64 .deb asset in the latest release (GitHub API error or rate limit?)."
 
   deb=$(mktemp --suffix=.deb)
   trap 'rm -f "$deb"' EXIT
   log "Downloading $url"
   curl -fsSL "$url" -o "$deb"
+
+  # Verify the download against the release asset's digest. GitHub records a
+  # sha256 for every release asset, and this repo uses immutable releases, so it
+  # can't change after publish. A mismatch aborts before install, since the .deb
+  # runs a postinst and patches binaries. The release publishes a single .deb
+  # asset, so its digest is the only one in the JSON. (Assets from before GitHub
+  # exposed digests fall back to a warning.)
+  digest=$(printf '%s' "$api" |
+    { grep -oE '"digest"[[:space:]]*:[[:space:]]*"sha256:[0-9a-f]{64}"' || true; } |
+    head -1 |
+    sed -E 's/.*"sha256:([0-9a-f]{64})".*/\1/')
+  if [ -n "$digest" ]; then
+    log "Verifying checksum…"
+    actual=$(sha256sum "$deb" | cut -d' ' -f1)
+    [ "$actual" = "$digest" ] ||
+      die "checksum mismatch for $(basename "$url"): expected $digest, got $actual."
+    log "Checksum OK."
+  else
+    log "warning: release asset has no digest; skipping checksum verification."
+  fi
 fi
 
 # glibc-runner and patchelf-glibc live in the glibc-packages repo, which the
