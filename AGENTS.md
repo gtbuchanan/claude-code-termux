@@ -28,10 +28,12 @@ publish the binary; the `.deb` contains no Anthropic bytes.
 1. The compiled C launcher (`bin/claude`) execs the patched binary —
    `execv` **preserves `argv[0]`** (so Claude's embedded `grep`/`find`/`rg`
    dispatch works), it **clears `LD_PRELOAD`** (so the glibc binary's `ld.so`
-   doesn't choke on termux-exec's text-script `libc.so`), and it **sets
+   doesn't choke on termux-exec's text-script `libc.so`), it **sets
    `TMPDIR`/`CLAUDE_CODE_TMPDIR`** to the Termux prefix when unset (Termux has no
    writable `/tmp`; see `src/claude-wrapper.c` for the env-vs-hardcoded-`/tmp`
-   analysis and the MCP-browser-bridge limitation, `claude-code#15637`).
+   analysis and the MCP-browser-bridge limitation, `claude-code#15637`), and it
+   **sets `DISABLE_AUTOUPDATER`** when unset, a second settings-independent
+   layer behind `autoUpdates: false` (next item) against the self-updater.
 1. `postinst` also merges two keys into `~/.claude/settings.json`:
    `env.LD_PRELOAD` (re-arms termux-exec for subprocess `/usr/bin/env` shebangs)
    and `autoUpdates: false` (so the in-session updater can't clobber the patched

@@ -58,6 +58,7 @@ static void reset_fixture(void) {
   unsetenv("TMPDIR");
   unsetenv("CLAUDE_CODE_TMPDIR");
   unsetenv("LD_PRELOAD");
+  unsetenv("DISABLE_AUTOUPDATER");
 }
 
 static const char *env_or_empty(const char *name) {
@@ -111,6 +112,31 @@ TEST preserves_existing_tmpdirs(void) {
 }
 
 /*
+ * Defense-in-depth: the wrapper disables Claude's self-updater via env, so a
+ * stock glibc build can't replace the patched binary even if settings.json's
+ * `autoUpdates: false` drifts.
+ */
+TEST sets_disable_autoupdater_when_unset(void) {
+  reset_fixture();
+  char *argv[] = {"claude", NULL};
+  claude_wrapper_run(1, argv, recording_exec);
+
+  ASSERT_STR_EQ("1", env_or_empty("DISABLE_AUTOUPDATER"));
+  PASS();
+}
+
+/* overwrite=0: an explicit user DISABLE_AUTOUPDATER must win. */
+TEST preserves_existing_disable_autoupdater(void) {
+  reset_fixture();
+  setenv("DISABLE_AUTOUPDATER", "0", 1);
+  char *argv[] = {"claude", NULL};
+  claude_wrapper_run(1, argv, recording_exec);
+
+  ASSERT_STR_EQ("0", env_or_empty("DISABLE_AUTOUPDATER"));
+  PASS();
+}
+
+/*
  * termux-exec is preloaded into every Termux shell; its text-script libc.so
  * crashes the glibc binary's ld.so, so the wrapper must clear LD_PRELOAD before
  * the handoff.
@@ -153,6 +179,8 @@ int main(int argc, char **argv) {
   RUN_TEST(preserves_argv_and_execs_baked_in_binary);
   RUN_TEST(sets_tmpdirs_when_unset);
   RUN_TEST(preserves_existing_tmpdirs);
+  RUN_TEST(sets_disable_autoupdater_when_unset);
+  RUN_TEST(preserves_existing_disable_autoupdater);
   RUN_TEST(clears_ld_preload);
   RUN_TEST(exec_failure_returns_127);
   GREATEST_MAIN_END();
