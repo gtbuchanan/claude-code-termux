@@ -145,7 +145,23 @@ fetch() {
 mode="${1:-ensure}"
 case "$mode" in
 ensure)
-  [ -x "$CURRENT" ] || fetch "$(resolve_version)"
+  # A present, executable `current` is not enough: a stock or half-patched
+  # binary keeps its +x bit but its ELF interpreter still points at glibc's
+  # default loader, which does not exist on Termux, so the kernel rejects the
+  # exec with "required file not found". That is exactly the breakage this
+  # package exists to fix, and `[ -x ]` can't see it. Verify the interpreter was
+  # actually repointed at Termux's glibc loader; repair otherwise (a
+  # missing/dangling `current` makes patchelf error → empty → also repairs).
+  # LD_PRELOAD is cleared for the same reason as in fetch(): patchelf is a glibc
+  # binary. `--force` still covers deeper corruption (correct interpreter, bad
+  # body).
+  if [ "$(LD_PRELOAD='' "$PATCHELF" --print-interpreter "$CURRENT" 2>/dev/null)" != "$GLIBC_LD" ]; then
+    # fetch() only patches a missing binary, so drop the mis-patched one (and the
+    # symlink) first, the same as --force, to force a clean re-download + re-patch.
+    v="$(resolve_version)"
+    rm -f "$OPT_DIR/claude-$v" "$CURRENT"
+    fetch "$v"
+  fi
   ;;
 update)
   # Resolve the target version and re-fetch only when it differs from the

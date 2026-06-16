@@ -167,4 +167,24 @@ if [ -n "${CLAUDE_CODE_CACHE_DIR:-}" ]; then
     "$(CLAUDE_CODE_VERSION="${installed#claude-}" claude-code-termux-update --force 2>&1)"
 fi
 
+# ensure repair: `ensure` must re-patch a present, executable `current` whose ELF
+# interpreter was never repointed (a stock/half-patched binary), a state `[ -x ]`
+# alone calls healthy. Corrupt the interpreter, run `ensure` pinned to the
+# installed version, and assert it is restored. With a warm CLAUDE_CODE_CACHE_DIR
+# the repair reuses the cached bytes instead of re-downloading.
+patchelf="$PREFIX/glibc/bin/patchelf"
+glibc_ld="$PREFIX/glibc/lib/ld-linux-aarch64.so.1"
+target=$(readlink -f "$PREFIX/opt/claude-code-termux/current")
+LD_PRELOAD='' "$patchelf" --set-interpreter /lib/ld-linux-aarch64.so.1 "$target"
+ensure_out=$(CLAUDE_CODE_VERSION="${installed#claude-}" "$PREFIX/libexec/claude-code-termux/bootstrap.sh" ensure 2>&1)
+repaired=$(LD_PRELOAD='' "$patchelf" --print-interpreter "$PREFIX/opt/claude-code-termux/current")
+[ "$repaired" = "$glibc_ld" ] ||
+  {
+    echo "ensure did not re-patch the mis-interpreted binary"
+    exit 1
+  }
+if [ -n "${CLAUDE_CODE_CACHE_DIR:-}" ]; then
+  assert_contains "Using cached" "$ensure_out"
+fi
+
 echo "claude-code-termux test: OK ($VERSION)"
