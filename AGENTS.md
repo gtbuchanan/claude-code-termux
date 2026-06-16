@@ -64,6 +64,7 @@ publish the binary; the `.deb` contains no Anthropic bytes.
 | `test/wrapper_test.c` | Unit tests for the launcher (greatest; recording exec stub). |
 | `test/compat.h` | Test-only `setenv`/`unsetenv` shims for Windows libc; force-included into the test build, never shipped. |
 | `vendor/greatest.h` | Vendored single-header test framework (greatest 1.5.0, ISC; from silentbicycle/greatest). Excluded from prek. |
+| `vendor/shunit2` | Vendored single-file shell test framework (shUnit2 2.1.9pre, Apache-2.0; pinned to kward/shunit2 master @ `f39734a` — no tagged release since 2.1.8, and master carries the `egrep`→`grep -E` fix we'd otherwise patch). Drives `scripts/e2e.sh`. Carries one local patch (grep `PATCHED FOR TERMUX`; re-apply on bump): `#! /bin/sh` stub scripts → resolve `sh` via PATH (submitted upstream as kward/shunit2#189). Excluded from prek. |
 | `scripts/build-wrapper.sh` | Compile the wrapper with Termux's clang. |
 | `scripts/build-deb.sh` | Stage + `dpkg-deb --build` → `artifacts/packages/`. |
 | `scripts/compile.sh` | Compile the wrapper + assemble the `.deb`, in a Termux env. |
@@ -132,8 +133,11 @@ install) need the container, split across two tasks:
 `mise run compile` produces the `.deb`, then `mise run test:e2e` installs it via
 `install.sh` and asserts the real fixes: `argv[0]=rg`/`bfs` dispatch to the
 embedded ripgrep/bfs, `LD_PRELOAD`-cleared startup, `TMPDIR` injection, the
-`settings.json` merge, and the conditional/cached update paths. On a dev host
-both dispatch to `scripts/docker-run.sh <script>`, which pulls
+`settings.json` merge, the conditional/cached update paths, and the
+interpreter-repair `ensure`. The suite is built on the vendored shUnit2 (a
+single sourced file; the install is its `oneTimeSetUp`, behaviors are
+definition-ordered `test_*` functions with the state-mutating ones last). On a
+dev host both tasks dispatch to `scripts/docker-run.sh <script>`, which pulls
 `termux/termux-docker:aarch64` and runs the script in it — natively on arm64
 hosts, under QEMU elsewhere (needs Docker + `binfmt`). It bind-mounts
 `artifacts/` writable over the read-only source, so the `.deb` `compile`
