@@ -117,6 +117,34 @@ shebang — there is no termux-exec preload inside the glibc claude process.
   `os.tmpdir()` resolver and its sandbox subprocess. See
   [anthropics/claude-code#15637](https://github.com/anthropics/claude-code/issues/15637).
 
+## Troubleshooting
+
+### `claude: cannot execute: required file not found`
+
+The `claude` being run is an **unpatched stock glibc binary**: its ELF
+interpreter points at `/lib/ld-linux-aarch64.so.1`, which doesn't exist on
+Termux, so the kernel refuses to exec it. This package patches the interpreter
+to Termux's glibc loader; the error means an unpatched binary is being resolved
+instead.
+
+It comes from Anthropic's **native installer** having run
+(`npm i -g @anthropic-ai/claude-code` or `claude install`): that writes a stock
+binary under `~/.local/share/claude/versions/` and repoints `~/.local/bin/claude`
+at it, shadowing this package's launcher.
+
+Fix it with:
+
+```bash
+claude-code-termux-update
+```
+
+The native installer leaves `~/.local/bin/claude` as a symlink into
+`~/.local/share/claude/versions/`, so this re-applies the ELF patch and
+reconciles that path back onto the launcher in one step.
+
+The stale stock binary it leaves under `~/.local/share/claude/versions/` is then
+unreferenced and safe to remove.
+
 ## Consumer setup (dotfiles)
 
 Drive the install from a dotfile manager and own `settings.json` yourself by
