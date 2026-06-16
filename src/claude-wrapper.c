@@ -52,6 +52,15 @@ int claude_wrapper_run(int argc, char **argv,
      grow the literal). */
   (void)setenv("TMPDIR", TMPDIR_PATH, 0);
   (void)setenv("CLAUDE_CODE_TMPDIR", TMPDIR_PATH, 0);
+  /* Defense-in-depth against Claude's self-updater. postinst sets
+     `autoUpdates: false` in settings.json, but that is a per-file flag the user
+     can drift (or a stray native install can ignore); when it does, the updater
+     fetches a stock glibc build that replaces the ELF-patched binary (or the
+     ~/.local/bin/claude launcher symlink) with one that can't exec on Termux.
+     DISABLE_AUTOUPDATER is the documented env kill switch, applied here as a
+     second, settings-independent layer that travels with every launch.
+     overwrite=0 so an explicit user value still wins. */
+  (void)setenv("DISABLE_AUTOUPDATER", "1", 0);
   (void)unsetenv("LD_PRELOAD");
   exec(BINARY, argv);
   fprintf(stderr, "claude wrapper: execv %s failed: %s\n", BINARY,
