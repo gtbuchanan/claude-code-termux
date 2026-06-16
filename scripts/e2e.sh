@@ -146,6 +146,19 @@ installed=$(readlink "$PREFIX/opt/claude-code-termux/current") # claude-<ver>
 assert_contains "already current" \
   "$(CLAUDE_CODE_VERSION="${installed#claude-}" claude-code-termux-update 2>&1)"
 
+# Native-symlink self-heal: claude-code-termux-update reconciles
+# ~/.local/bin/claude → the launcher (via link-native.sh) before updating, so a
+# clobbered symlink recovers without a reinstall. Repoint it elsewhere, run the
+# update (pinned to the installed version so it short-circuits the fetch), and
+# assert the symlink is restored to the launcher.
+ln -sfn /nonexistent "$native_link"
+CLAUDE_CODE_VERSION="${installed#claude-}" claude-code-termux-update >/dev/null 2>&1
+[ "$(readlink "$native_link")" = "$PREFIX/bin/claude" ] ||
+  {
+    echo "update did not self-heal the native symlink"
+    exit 1
+  }
+
 # Binary cache: when CLAUDE_CODE_CACHE_DIR is set the initial install populated
 # it, so a forced re-fetch must reuse the cached bytes ("Using cached") rather
 # than re-download — while still re-patching (patchelf + execPath run anyway).

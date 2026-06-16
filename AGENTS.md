@@ -41,7 +41,9 @@ publish the binary; the `.deb` contains no Anthropic bytes.
    `postrm` removes it only when it still points at the launcher. The symlink
    targets the launcher (not the patched binary), so the env setup is preserved,
    and `autoUpdates: false` keeps the native self-updater from overwriting it. A
-   user-managed regular file at that path is left untouched.
+   user-managed regular file at that path is left untouched. The reconcile lives
+   in `link-native.sh`, shared by `postinst` and `claude-code-termux-update`, so
+   a clobbered symlink self-heals on the next (schedulable) update.
 
 ## Layout
 
@@ -49,10 +51,11 @@ publish the binary; the `.deb` contains no Anthropic bytes.
 |---|---|
 | `install.sh` | Single install path. Downloads the latest release `.deb` (or installs a local one via `CLAUDE_CODE_DEB=<path>`), enables `glibc-repo`, `apt install`s it. |
 | `package/control` | Metadata. `Depends: bash, curl, jq, python3, glibc-runner, patchelf-glibc`. |
-| `package/postinst` | Settings merge (skip via `CLAUDE_CODE_SKIP_SETTINGS`) + native-path symlink (`~/.local/bin/claude`) + fetch the binary. |
+| `package/postinst` | Settings merge (skip via `CLAUDE_CODE_SKIP_SETTINGS`) + native-path symlink (via `link-native.sh`) + fetch the binary. |
 | `package/postrm` | Removes the fetched binary and the native-path symlink on uninstall. |
-| `package/payload/bin/claude-code-termux-update` | Re-patch only if the version changed (`bootstrap.sh update`; schedulable). `--force` to re-apply. |
+| `package/payload/bin/claude-code-termux-update` | Reconcile the native-path symlink (`link-native.sh`), then re-patch only if the version changed (`bootstrap.sh update`; schedulable). `--force` to re-apply. |
 | `package/payload/libexec/bootstrap.sh` | Resolve / download (`curl --retry`, optional `CLAUDE_CODE_CACHE_DIR`) / verify / `patchelf` / execPath-patch engine. |
+| `package/payload/libexec/link-native.sh` | Idempotent native-path symlink (`~/.local/bin/claude` → launcher) reconcile, shared by `postinst` and the update command. |
 | `package/payload/libexec/patch-execpath.py` | The `CLAUDE_CODE_EXECPATH` patch. |
 | `package/payload/etc/claude-code-termux.conf` | `CLAUDE_CODE_VERSION` pin + `CLAUDE_CODE_CACHE_DIR` (both empty by default). |
 | `src/claude-wrapper.c` | The C launcher (`-DBINARY=` baked in at compile). `claude_wrapper_run()` takes its exec function as a parameter — a seam the unit tests fake. |
