@@ -1,0 +1,70 @@
+amends "package://github.com/jdx/hk/releases/download/v1.48.0/hk@1.48.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v1.48.0/hk@1.48.0#/Builtins.pkl"
+
+// Shared hk preset (@gtbuchanan/tooling), consumed via its published
+// GitHub-release Pkl package (the consumer import; tooling self-hosts it by
+// relative path). Renovate keeps both the hk and hk-config versions in these
+// package URLs in sync (the shared preset's customManager matches `*.pkl`).
+import "package://github.com/gtbuchanan/tooling/releases/download/hk-config@0.1.0/hk-config@0.1.0#/Defaults.pkl"
+
+// check-json / check-toml / check-yaml from the prek config are dropped as
+// redundant: the only JSON (.github/renovate.json) is validated by the
+// renovate-config step, every YAML is a workflow validated by actionlint, and
+// the TOML (mise.toml / ruff.toml) is parsed by mise / ruff themselves.
+// check-illegal-windows-names is likewise dropped (no hk builtin; redundant on
+// a Windows-primary dev repo) — matching the shared preset's rationale.
+local allSteps = new Mapping<String, Step> {
+    ...Defaults.fileHygiene
+    ["forbid-submodules"] = Defaults.forbidSubmodules
+    ["renovate-config"] = Defaults.renovateConfig
+    ["actionlint"] = Builtins.actionlint
+
+    // `gtb sync mise` generates mise.tasks.toml; guard its loader include
+    // against drift.
+    ["verify-mise"] {
+        glob = List("mise.toml", "mise.tasks.toml")
+        check = "gtb verify mise"
+    }
+
+    // Many of this repo's shell scripts are extensionless (mise tasks, the
+    // Debian maintainer scripts, the launcher CLI), so select by content type
+    // — extension *and* shebang — rather than the builtins' `*.sh` globs. The
+    // exclude drops vendored shell sources (vendor/shunit2).
+    ["shellcheck"] = (Builtins.shellcheck) {
+        glob = null
+        types = List("shell")
+        exclude = Defaults.defaultExclude
+    }
+    ["shfmt"] = (Builtins.shfmt) {
+        glob = null
+        types = List("shell")
+        exclude = Defaults.defaultExclude
+    }
+    // C launcher + unit tests; vendor/greatest.h is dropped by the exclude.
+    ["clang-format"] = (Builtins.clang_format) {
+        glob = List("**/*.c", "**/*.h")
+        exclude = Defaults.defaultExclude
+    }
+    ["ruff"] = Builtins.ruff
+    ["ruff-format"] = Builtins.ruff_format
+}
+
+hooks {
+    ["pre-commit"] {
+        fix = true
+        stash = "git"
+        steps {
+            ...allSteps
+            // Commit-time guard only: it needs a branch name, so it errors on
+            // CI's detached HEAD and is irrelevant to `hk check`/`hk fix`.
+            ["no-commit-to-branch"] = Builtins.no_commit_to_branch
+        }
+    }
+    ["check"] {
+        steps { ...allSteps }
+    }
+    ["fix"] {
+        fix = true
+        steps { ...allSteps }
+    }
+}
