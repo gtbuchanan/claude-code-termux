@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+#MISE description="Unit-test install.sh's pure helpers with shUnit2 (fast; no Docker)"
+#
+# Sources install.sh under its lib guard and drives its pure helpers via
+# shUnit2 — no network, no apt, no Termux. See test/install_test.sh.
+#
+#   mise run test:shunit2 [-- shUnit2 args, e.g. a test_* name filter]
+set -euo pipefail
+
+exec bash "$MISE_PROJECT_ROOT/test/install_test.sh" "$@"

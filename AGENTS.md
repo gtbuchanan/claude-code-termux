@@ -56,7 +56,7 @@ publish the binary; the `.deb` contains no Anthropic bytes.
 
 | Path | Role |
 |---|---|
-| `install.sh` | Single install path. Downloads the latest release `.deb` (or installs a local one via `CLAUDE_CODE_DEB=<path>`), enables `glibc-repo`, `apt install`s it. |
+| `install.sh` | Single install path. Downloads the latest release `.deb` (or installs a local one via `CLAUDE_CODE_DEB=<path>`), enables `glibc-repo`, `apt install`s it. The install flow is in `main` behind a `CLAUDE_CODE_INSTALL_LIB` guard so the unit test can source its pure helpers without running it (and `curl \| bash` still runs `main`). |
 | `package/control` | Metadata. `Depends: bash, curl, jq, python3, glibc-runner, patchelf-glibc`. |
 | `package/postinst` | Settings merge (skip via `CLAUDE_CODE_SKIP_SETTINGS`) + native-path symlink (via `link-native.sh`) + fetch the binary. |
 | `package/postrm` | Removes the fetched binary and the native-path symlink on uninstall. |
@@ -68,9 +68,10 @@ publish the binary; the `.deb` contains no Anthropic bytes.
 | `src/claude-wrapper.c` | The C launcher (`-DBINARY=`/`-DTMPDIR_PATH=`/`-DUNAME_SHIM=` baked in at compile). `claude_wrapper_run()` takes its exec function as a parameter — a seam the unit tests fake. |
 | `src/uname-shim.c` | Freestanding `LD_PRELOAD` `uname()` interposer reporting kernel `5.10.0`, so Bun avoids the `epoll_pwait2` startup segfault (bun#32489). Built by `build-wrapper.sh`, shipped to `lib/claude-code-termux/uname-spoof.so`, preloaded by the launcher. |
 | `test/wrapper_test.c` | Unit tests for the launcher (greatest; recording exec stub). |
+| `test/install_test.sh` | Hermetic unit tests for `install.sh`'s pure helpers (shUnit2; no network/apt). |
 | `test/compat.h` | Test-only `setenv`/`unsetenv` shims for Windows libc; force-included into the test build, never shipped. |
 | `vendor/greatest.h` | Vendored single-header test framework (greatest 1.5.0, ISC; from silentbicycle/greatest). |
-| `vendor/shunit2` | Vendored single-file shell test framework (shUnit2 2.1.9pre, Apache-2.0; pinned to kward/shunit2 master @ `f39734a` — no tagged release since 2.1.8, and master carries the `egrep`→`grep -E` fix we'd otherwise patch). Drives `scripts/e2e.sh`. Carries one local patch (grep `PATCHED FOR TERMUX`; re-apply on bump): `#! /bin/sh` stub scripts → resolve `sh` via PATH (submitted upstream as kward/shunit2#189). |
+| `vendor/shunit2` | Vendored single-file shell test framework (shUnit2 2.1.9pre, Apache-2.0; pinned to kward/shunit2 master @ `f39734a` — no tagged release since 2.1.8, and master carries the `egrep`→`grep -E` fix we'd otherwise patch). Drives `scripts/e2e.sh` and `test/install_test.sh`. Carries one local patch (grep `PATCHED FOR TERMUX`; re-apply on bump): `#! /bin/sh` stub scripts → resolve `sh` via PATH (submitted upstream as kward/shunit2#189). |
 | `scripts/build-wrapper.sh` | Compile the wrapper + uname shim with Termux's clang. |
 | `scripts/build-deb.sh` | Stage + `dpkg-deb --build` → `artifacts/packages/`. |
 | `scripts/compile.sh` | Compile the wrapper + assemble the `.deb`, in a Termux env. |
@@ -94,11 +95,14 @@ hosts and the Linux CI runner.
 - `mise run hk:all` — run the hk hooks over all files (autofixes locally,
   checks in CI). `mise run hk:base [ref]` runs them over files changed from a
   base ref (default `origin/main`). Append `-- -S <step>` to target one step.
-- `mise run test:fast` — fast, host-native unit tests for the C launcher:
-  compiles `src/claude-wrapper.c` with mise's `zig` and runs it directly (no
-  Termux/Docker), in milliseconds. Append `-- -v` for per-test greatest output.
+- `mise run test:fast` — the fast, host-native unit suites (no Termux/Docker,
+  milliseconds); an aggregator over two focused tasks you can also run alone:
+  - `mise run test:greatest` — the C launcher: compiles `src/claude-wrapper.c`
+    with mise's `zig` and runs it directly. Append `-- -v` for per-test greatest
+    output.
+  - `mise run test:shunit2` — `install.sh`'s pure helpers, via shUnit2.
 - `mise run check` — the fast local gate: the hk hooks (`hk:all`) plus
-  the launcher unit tests (`test:fast`). No Docker.
+  the unit suites (`test:fast`). No Docker.
 - `mise run compile [version]` — compile the launcher + assemble the `.deb`
   (→ `artifacts/packages/`), env-aware: `scripts/compile.sh` natively on a Termux
   device, else `scripts/docker-run.sh` (the container) on a dev host.
@@ -133,10 +137,11 @@ The version is passed in by the caller; `build-deb.sh`, `compile.sh`, and
 
 ## Testing locally
 
-Two layers. The launcher's logic (env shaping + the exec handoff) has fast
-**unit tests** that run anywhere via `mise run test:fast` — no Termux, no
-Docker (see Dev environment). The end-to-end behaviors (real binary, dispatch,
-install) need the container, split across two tasks:
+Two layers. Fast **unit tests** for the launcher's logic (env shaping + the exec
+handoff) and for `install.sh`'s pure helpers run anywhere via `mise run
+test:fast` — no Termux, no Docker (see Dev environment). The end-to-end
+behaviors (real binary, dispatch, install) need the container, split across two
+tasks:
 
 `mise run compile` produces the `.deb`, then `mise run test:e2e` installs it via
 `install.sh` and asserts the real fixes: `argv[0]=rg`/`bfs` dispatch to the
@@ -171,8 +176,9 @@ vars **inline** in the `bash -c` string instead.
   the shared `tooling/.github/workflows/pre-commit.yml` reusable (PR-only — the
   reusable diffs against the PR base, so it's skipped on push/schedule
   `workflow_call` invocations); a `unit` job that runs `mise run test:fast`
-  (the launcher unit tests build + run natively via `zig` — no container, fast,
-  arch-independent); plus the `compile` and `e2e` jobs. `compile` runs `mise run
+  (the launcher tests build + run natively via `zig`, the `install.sh` tests via
+  shUnit2 — no container, fast, arch-independent); plus the `compile` and `e2e`
+  jobs. `compile` runs `mise run
   compile` and uploads the `.deb` as an artifact; `e2e` (`needs: compile`)
   downloads it and runs `mise run test:e2e` — so a compile break and an
   install/behavior break surface as distinct job failures. Both go through the
