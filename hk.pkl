@@ -1,0 +1,25 @@
+amends "package://github.com/jdx/hk/releases/download/v1.48.0/hk@1.48.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v1.48.0/hk@1.48.0#/Builtins.pkl"
+
+import "package://github.com/gtbuchanan/tooling/releases/download/hk-config@0.2.0/hk-config@0.2.0#/Defaults.pkl"
+
+local allSteps = new Mapping<String, Step> {
+    ...Defaults.recommended
+
+    // C launcher + unit tests; vendor/greatest.h is dropped by the exclude.
+    ["clang-format"] = (Builtins.clang_format) {
+        glob = List("**/*.c", "**/*.h")
+        exclude = Defaults.defaultExclude
+    }
+    ["ruff"] = Builtins.ruff
+    ["ruff-format"] = Builtins.ruff_format
+
+    // `gtb sync mise` generates mise.tasks.toml; guard its loader include
+    // against drift.
+    ["verify-mise"] {
+        glob = List("mise.toml", "mise.tasks.toml")
+        check = "gtb verify mise"
+    }
+}
+
+hooks = Defaults.hooksFor(allSteps)
