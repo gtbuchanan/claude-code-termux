@@ -42,8 +42,8 @@ asset_url() {
 # records a sha256 for every release asset and this repo's releases are
 # immutable, so it can't change after publish; the lone .deb asset means its is
 # the only digest in the JSON. Same grep/sed-not-jq and `|| true` rationale as
-# asset_url; an absent digest (assets predating GitHub's digest field) is
-# handled by main as a skip-with-warning.
+# asset_url; an absent digest makes main abort (it only fetches the latest
+# release, which always carries one).
 asset_digest() {
   printf '%s' "$1" |
     { grep -oE '"digest"[[:space:]]*:[[:space:]]*"sha256:[0-9a-f]{64}"' || true; } |
@@ -76,18 +76,19 @@ main() {
     log "Downloading $url"
     curl -fsSL "$url" -o "$deb"
 
-    # Verify the download against the release asset's digest. A mismatch aborts
-    # before install, since the .deb runs a postinst that patches binaries.
+    # Verify the download against the release asset's digest before install,
+    # since the .deb runs a postinst that patches binaries. A missing digest
+    # aborts too: install.sh only fetches the latest release, which always
+    # carries one, so its absence means tampered or unexpected metadata — not a
+    # legitimately undigested asset — and skipping the check would defeat it.
     digest=$(asset_digest "$api")
-    if [ -n "$digest" ]; then
-      log "Verifying checksum…"
-      actual=$(sha256sum "$deb" | cut -d' ' -f1)
-      [ "$actual" = "$digest" ] ||
-        die "checksum mismatch for $(basename "$url"): expected $digest, got $actual."
-      log "Checksum OK."
-    else
-      log "warning: release asset has no digest; skipping checksum verification."
-    fi
+    [ -n "$digest" ] ||
+      die "no sha256 digest for $(basename "$url") in the release metadata; refusing to install unverified."
+    log "Verifying checksum…"
+    actual=$(sha256sum "$deb" | cut -d' ' -f1)
+    [ "$actual" = "$digest" ] ||
+      die "checksum mismatch for $(basename "$url"): expected $digest, got $actual."
+    log "Checksum OK."
   fi
 
   # glibc-runner and patchelf-glibc live in the glibc-packages repo, which the
