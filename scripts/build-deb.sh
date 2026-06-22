@@ -34,10 +34,15 @@ build="$root/artifacts/build"
 pkgdir="$root/artifacts/packages"
 stage="$build/${PKG}_${VERSION}_${ARCH}"
 
-# The compiled launcher wrapper must be built first (build-wrapper.sh, inside
-# termux/termux-docker:aarch64) so the ELF matches the device.
+# The compiled launcher wrapper + uname shim must be built first
+# (build-wrapper.sh, inside termux/termux-docker:aarch64) so the ELF matches the
+# device.
 [ -x "$build/claude" ] || {
   echo "error: $build/claude not found — run build-wrapper.sh first." >&2
+  exit 1
+}
+[ -f "$build/uname-spoof.so" ] || {
+  echo "error: $build/uname-spoof.so not found — run build-wrapper.sh first." >&2
   exit 1
 }
 
@@ -53,10 +58,13 @@ printf '/%s/etc/%s.conf\n' "$PREFIX_REL" "$PKG" >"$stage/DEBIAN/conffiles"
 
 # Payload, staged under the Termux prefix.
 install -d "$stage/$PREFIX_REL/bin"
+install -d "$stage/$PREFIX_REL/lib/$PKG"
 install -d "$stage/$PREFIX_REL/libexec/$PKG"
 install -d "$stage/$PREFIX_REL/etc"
 install -d "$stage/$PREFIX_REL/share/doc/$PKG"
 install -m 0755 "$build/claude" "$stage/$PREFIX_REL/bin/claude"
+# The wrapper LD_PRELOADs this; its baked-in UNAME_SHIM path must match.
+install -m 0644 "$build/uname-spoof.so" "$stage/$PREFIX_REL/lib/$PKG/uname-spoof.so"
 install -m 0755 "$root/package/payload/bin/claude-code-termux-update" "$stage/$PREFIX_REL/bin/claude-code-termux-update"
 install -m 0755 "$root/package/payload/libexec/bootstrap.sh" "$stage/$PREFIX_REL/libexec/$PKG/bootstrap.sh"
 install -m 0755 "$root/package/payload/libexec/link-native.sh" "$stage/$PREFIX_REL/libexec/$PKG/link-native.sh"

@@ -27,13 +27,18 @@ publish the binary; the `.deb` contains no Anthropic bytes.
    assignment.
 1. The compiled C launcher (`bin/claude`) execs the patched binary —
    `execv` **preserves `argv[0]`** (so Claude's embedded `grep`/`find`/`rg`
-   dispatch works), it **clears `LD_PRELOAD`** (so the glibc binary's `ld.so`
-   doesn't choke on termux-exec's text-script `libc.so`), it **sets
-   `TMPDIR`/`CLAUDE_CODE_TMPDIR`** to the Termux prefix when unset (Termux has no
-   writable `/tmp`; see `src/claude-wrapper.c` for the env-vs-hardcoded-`/tmp`
-   analysis and the MCP-browser-bridge limitation, `claude-code#15637`), and it
-   **sets `DISABLE_AUTOUPDATER`** when unset, a second settings-independent
-   layer behind `autoUpdates: false` (next item) against the self-updater.
+   dispatch works), it **overwrites `LD_PRELOAD` with the uname shim**
+   (`lib/claude-code-termux/uname-spoof.so`): this both evicts termux-exec's
+   text-script `libc.so` (which the glibc binary's `ld.so` can't load) and
+   preloads a freestanding `uname()` interposer that reports a `< 5.11` kernel,
+   so Bun skips the `epoll_pwait2` path that segfaults at startup on newer
+   kernels (bun#32489 — see `src/uname-shim.c` and `claude-code#50270`). It also
+   **sets `TMPDIR`/`CLAUDE_CODE_TMPDIR`** to the Termux prefix when unset (Termux
+   has no writable `/tmp`; see `src/claude-wrapper.c` for the
+   env-vs-hardcoded-`/tmp` analysis and the MCP-browser-bridge limitation,
+   `claude-code#15637`), and it **sets `DISABLE_AUTOUPDATER`** when unset, a
+   second settings-independent layer behind `autoUpdates: false` (next item)
+   against the self-updater.
 1. `postinst` also merges two keys into `~/.claude/settings.json`:
    `env.LD_PRELOAD` (re-arms termux-exec for subprocess `/usr/bin/env` shebangs)
    and `autoUpdates: false` (so the in-session updater can't clobber the patched
@@ -60,12 +65,13 @@ publish the binary; the `.deb` contains no Anthropic bytes.
 | `package/payload/libexec/link-native.sh` | Idempotent native-path symlink (`~/.local/bin/claude` → launcher) reconcile, shared by `postinst` and the update command. |
 | `package/payload/libexec/patch-execpath.py` | The `CLAUDE_CODE_EXECPATH` patch. |
 | `package/payload/etc/claude-code-termux.conf` | `CLAUDE_CODE_VERSION` pin + `CLAUDE_CODE_CACHE_DIR` (both empty by default). |
-| `src/claude-wrapper.c` | The C launcher (`-DBINARY=` baked in at compile). `claude_wrapper_run()` takes its exec function as a parameter — a seam the unit tests fake. |
+| `src/claude-wrapper.c` | The C launcher (`-DBINARY=`/`-DTMPDIR_PATH=`/`-DUNAME_SHIM=` baked in at compile). `claude_wrapper_run()` takes its exec function as a parameter — a seam the unit tests fake. |
+| `src/uname-shim.c` | Freestanding `LD_PRELOAD` `uname()` interposer reporting kernel `5.10.0`, so Bun avoids the `epoll_pwait2` startup segfault (bun#32489). Built by `build-wrapper.sh`, shipped to `lib/claude-code-termux/uname-spoof.so`, preloaded by the launcher. |
 | `test/wrapper_test.c` | Unit tests for the launcher (greatest; recording exec stub). |
 | `test/compat.h` | Test-only `setenv`/`unsetenv` shims for Windows libc; force-included into the test build, never shipped. |
 | `vendor/greatest.h` | Vendored single-header test framework (greatest 1.5.0, ISC; from silentbicycle/greatest). Excluded from prek. |
 | `vendor/shunit2` | Vendored single-file shell test framework (shUnit2 2.1.9pre, Apache-2.0; pinned to kward/shunit2 master @ `f39734a` — no tagged release since 2.1.8, and master carries the `egrep`→`grep -E` fix we'd otherwise patch). Drives `scripts/e2e.sh`. Carries one local patch (grep `PATCHED FOR TERMUX`; re-apply on bump): `#! /bin/sh` stub scripts → resolve `sh` via PATH (submitted upstream as kward/shunit2#189). Excluded from prek. |
-| `scripts/build-wrapper.sh` | Compile the wrapper with Termux's clang. |
+| `scripts/build-wrapper.sh` | Compile the wrapper + uname shim with Termux's clang. |
 | `scripts/build-deb.sh` | Stage + `dpkg-deb --build` → `artifacts/packages/`. |
 | `scripts/compile.sh` | Compile the wrapper + assemble the `.deb`, in a Termux env. |
 | `scripts/e2e.sh` | Install the prebuilt `.deb` + assert the fixes, in a Termux env. |
@@ -132,9 +138,12 @@ install) need the container, split across two tasks:
 
 `mise run compile` produces the `.deb`, then `mise run test:e2e` installs it via
 `install.sh` and asserts the real fixes: `argv[0]=rg`/`bfs` dispatch to the
-embedded ripgrep/bfs, `LD_PRELOAD`-cleared startup, `TMPDIR` injection, the
-`settings.json` merge, the conditional/cached update paths, and the
-interpreter-repair `ensure`. The suite is built on the vendored shUnit2 (a
+embedded ripgrep/bfs, startup with `LD_PRELOAD` set (the launcher overwrites it
+with the uname shim), a runtime-init boot guard (`claude mcp list` spins up
+Bun's event loop — catching startup crashes the `--version` fast path can't,
+e.g. the Bun 1.4.0 `epoll_pwait2` segfault the uname shim prevents), `TMPDIR`
+injection, the `settings.json` merge, the conditional/cached update paths, and
+the interpreter-repair `ensure`. The suite is built on the vendored shUnit2 (a
 single sourced file; the install is its `oneTimeSetUp`, behaviors are
 definition-ordered `test_*` functions with the state-mutating ones last). On a
 dev host both tasks dispatch to `scripts/docker-run.sh <script>`, which pulls

@@ -77,10 +77,13 @@ re-downloaded. Leave it empty (the default) to disable caching.
    (`patchelf`), and blanks the subprocess `CLAUDE_CODE_EXECPATH` assignment
    (`patch-execpath.py`) so embedded-tool re-execs route back through the
    launcher.
-1. The compiled launcher execs the patched binary with `LD_PRELOAD` cleared,
-   preserving `argv[0]` so Claude's `grep`/`find`/`rg` dispatch works, and sets
-   `TMPDIR`/`CLAUDE_CODE_TMPDIR` to the Termux prefix (only when unset) since
-   Termux has no writable `/tmp`.
+1. The compiled launcher execs the patched binary, preserving `argv[0]` so
+   Claude's `grep`/`find`/`rg` dispatch works. It overwrites `LD_PRELOAD` with a
+   small `uname` shim: this evicts termux-exec's `libc.so` (which the glibc
+   binary's loader can't load) and reports a `< 5.11` kernel so the bundled Bun
+   skips an `epoll_pwait2` path that otherwise segfaults at startup on newer
+   Android kernels (bun#32489). It also sets `TMPDIR`/`CLAUDE_CODE_TMPDIR` to the
+   Termux prefix (only when unset) since Termux has no writable `/tmp`.
 1. The postinstall also symlinks the launcher onto Anthropic's native-install
    path (`~/.local/bin/claude`) so Claude's health check passes when it detects
    `installMethod: native`. The symlink targets the launcher (not the patched
