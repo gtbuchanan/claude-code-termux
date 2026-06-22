@@ -291,6 +291,36 @@ test_update_short_circuits_on_same_version() {
   assertContains 'update short-circuits on same version' "$out" 'already current'
 }
 
+# Preflight: when the device can't exec a patched-interpreter glibc binary, the
+# fetch must abort with a clear message BEFORE the multi-MB download rather than
+# failing mid-patch. Drive bootstrap against a stub patchelf that emits the
+# kernel's rejection signature, in an isolated PREFIX/GLIBC_PREFIX so no real
+# state or network is touched (version pinned → no release lookup; the abort
+# lands before any download).
+test_preflight_aborts_when_glibc_exec_fails() {
+  local fake out
+  fake=$(mktemp -d)
+  mkdir -p "$fake/glibc/bin" "$fake/glibc/lib" "$fake/opt/claude-code-termux"
+  cat >"$fake/glibc/bin/patchelf" <<EOF
+#!$PREFIX/bin/bash
+echo 'CANNOT LINK EXECUTABLE "x": library "libstdc++.so.6" not found' >&2
+exit 1
+EOF
+  chmod +x "$fake/glibc/bin/patchelf"
+  : >"$fake/glibc/lib/ld-linux-aarch64.so.1"
+  # Resolve the (installed) bootstrap path up front: the inline assignments below
+  # set the child's environment, so referencing $PREFIX in the same command would
+  # see the real prefix, not $fake (and shellcheck SC2097/SC2098 would flag it).
+  local boot="$PREFIX/libexec/claude-code-termux/bootstrap.sh"
+  out=$(PREFIX="$fake" GLIBC_PREFIX="$fake/glibc" CLAUDE_CODE_VERSION=9.9.9 \
+    "$boot" --force 2>&1)
+  assertNotEquals 'preflight aborts with non-zero status' 0 "$?"
+  assertContains 'preflight surfaces the cannot-run message' \
+    "$out" "can't run on this device"
+  assertNotContains 'preflight aborts before downloading' "$out" 'Downloading'
+  rm -rf "$fake"
+}
+
 # --- State-mutating checks (kept last; order matters) -----------------------
 # Self-heal: the update reconciles ~/.local/bin/claude → the launcher (via
 # link-native.sh) before updating, so a clobbered symlink recovers without a

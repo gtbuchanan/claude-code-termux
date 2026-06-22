@@ -148,6 +148,19 @@ reconciles that path back onto the launcher in one step.
 The stale stock binary it leaves under `~/.local/share/claude/versions/` is then
 unreferenced and safe to remove.
 
+### Claude Code can't run on this device
+
+On some Android setups the kernel won't launch the glibc binary Anthropic ships,
+even after this package patches its ELF interpreter — the install detects this
+and stops. First make sure Termux and `termux-exec` are fully up to date (older
+`termux-exec` can't route execs the way newer Android requires) and retry. If it
+still fails, the patch-and-exec approach this package relies on can't run here;
+use an older, JavaScript-based Claude Code instead:
+
+```bash
+npm install -g @anthropic-ai/claude-code@2.1.112
+```
+
 ## Consumer setup (dotfiles)
 
 Drive the install from a dotfile manager and own `settings.json` yourself by

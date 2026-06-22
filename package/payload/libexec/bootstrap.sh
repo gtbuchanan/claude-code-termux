@@ -59,6 +59,27 @@ if [ -r "$CONF" ]; then
   [ -n "$_env_cache" ] && CLAUDE_CODE_CACHE_DIR="$_env_cache"
 fi
 
+# patchelf is itself a glibc binary with a patched ELF interpreter, so a clean
+# `patchelf --version` confirms the exec path the Claude binary needs. The error
+# signatures below mean the kernel rejected the interpreter and neither can run.
+preflight_glibc_exec() {
+  local out
+  if out="$(LD_PRELOAD='' "$PATCHELF" --version 2>&1)"; then
+    return 0
+  fi
+  case "$out" in
+  *"CANNOT LINK EXECUTABLE"* | *"Could not find a PHDR"*)
+    die "Claude Code can't run on this device — the kernel won't launch the
+binary Anthropic ships. Make sure Termux and termux-exec are up to date and
+retry. If it still fails, install an older, JavaScript-based version instead:
+  npm install -g @anthropic-ai/claude-code@2.1.112"
+    ;;
+  *)
+    die "patchelf failed to run (is glibc-runner installed?): $out"
+    ;;
+  esac
+}
+
 resolve_version() {
   local v="${CLAUDE_CODE_VERSION:-}"
   if [ -z "$v" ]; then
@@ -80,6 +101,10 @@ fetch() {
   command -v python3 >/dev/null 2>&1 || die "missing 'python3' — pkg install python"
   [ -x "$PATCHELF" ] || die "patchelf not found at $PATCHELF — pkg install patchelf-glibc"
   [ -e "$GLIBC_LD" ] || die "glibc loader not found at $GLIBC_LD — pkg install glibc-runner"
+
+  # Fail fast (before the multi-MB download) if this device can't exec a
+  # patched-interpreter glibc binary at all.
+  preflight_glibc_exec
 
   mkdir -p "$OPT_DIR"
 
