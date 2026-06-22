@@ -124,7 +124,11 @@ fetch() {
     [ -n "${CLAUDE_CODE_CACHE_DIR:-}" ] && cache="$CLAUDE_CODE_CACHE_DIR/claude-$version-$PLATFORM"
 
     tmp=$(mktemp)
-    trap 'rm -f "$tmp"' EXIT
+    # Expand $tmp into the trap now: on a set -e abort the EXIT trap fires after
+    # `local tmp` has left scope, so a deferred "$tmp" would both trip set -u
+    # (masking the real error) and skip the cleanup.
+    # shellcheck disable=SC2064  # expansion is intentional, per the comment above
+    trap "rm -f '$tmp'" EXIT
 
     if [ -n "$cache" ] && [ -f "$cache" ] &&
       [ "$(sha256sum "$cache" | cut -d' ' -f1)" = "$checksum" ]; then
