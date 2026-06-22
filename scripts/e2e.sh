@@ -89,10 +89,12 @@ oneTimeSetUp() {
   # Probe whose BINARY is `env`, so the TMPDIR tests can read the environment the
   # wrapper hands to the exec'd process. It must be named `env`: the wrapper
   # preserves argv[0], and Termux's `env` is the coreutils multiplexer that
-  # dispatches on argv[0]'s basename.
+  # dispatches on argv[0]'s basename. UNAME_SHIM points at the installed shim
+  # (already staged by the install above) — the wrapper LD_PRELOADs it, and
+  # bionic's linker aborts on a missing preload.
   probe="$(mktemp -d)/env"
   clang -O2 -DBINARY="\"$PREFIX/bin/env\"" -DTMPDIR_PATH="\"/PROBE_TMPDIR\"" \
-    -DUNAME_SHIM="\"/PROBE_SHIM\"" \
+    -DUNAME_SHIM="\"$PREFIX/lib/claude-code-termux/uname-spoof.so\"" \
     -o "$probe" src/claude-wrapper.c >&2 || fatal "probe compile failed"
 }
 
