@@ -147,6 +147,61 @@ test_settings_preserves_existing_keys() {
     "jq -e '.permissions.allow | index(\"Bash(echo:*)\")' '$settings' >/dev/null"
 }
 
+# postinst resolves the termux-exec preload lib by name, since it varies across
+# termux-exec versions (libtermux-exec-ld-preload.so on 2.x, only the legacy
+# libtermux-exec.so on 1.x). The install above already covered the modern name;
+# these drive postinst in an isolated PREFIX/HOME — with the post-merge steps
+# (link-native, bootstrap ensure) stubbed out — so only the settings merge runs,
+# exercising the fallback and the no-lib branch without network or real state.
+_run_isolated_postinst() { # $1 = fake root; caller pre-creates $1/lib/*
+  local root="$1"
+  mkdir -p "$root/libexec/claude-code-termux" "$root/home"
+  printf '#!%s\nexit 0\n' "$PREFIX/bin/bash" \
+    >"$root/libexec/claude-code-termux/link-native.sh"
+  printf '#!%s\nexit 0\n' "$PREFIX/bin/bash" \
+    >"$root/libexec/claude-code-termux/bootstrap.sh"
+  chmod +x "$root/libexec/claude-code-termux/"*.sh
+  PREFIX="$root" HOME="$root/home" bash "$PWD/package/postinst" configure 2>/dev/null
+}
+test_postinst_falls_back_to_legacy_preload_lib() {
+  local root
+  root=$(mktemp -d)
+  mkdir -p "$root/lib"
+  : >"$root/lib/libtermux-exec.so" # only the legacy name present
+  _run_isolated_postinst "$root"
+  assertEquals 'falls back to legacy libtermux-exec.so when modern name absent' \
+    "$root/lib/libtermux-exec.so" \
+    "$(jq -r '.env.LD_PRELOAD' "$root/home/.claude/settings.json")"
+  rm -rf "$root"
+}
+test_postinst_skips_preload_when_no_lib() {
+  local root s
+  root=$(mktemp -d)
+  mkdir -p "$root/lib" # no preload lib at all
+  _run_isolated_postinst "$root"
+  s="$root/home/.claude/settings.json"
+  assertEquals 'no LD_PRELOAD written when no termux-exec lib found' false \
+    "$(jq -c '(.env // {}) | has("LD_PRELOAD")' "$s")"
+  assertTrue 'autoUpdates still disabled when no lib found' \
+    "jq -e '.autoUpdates == false' '$s' >/dev/null"
+  rm -rf "$root"
+}
+test_postinst_clears_stale_preload_when_no_lib() {
+  local root s
+  root=$(mktemp -d)
+  mkdir -p "$root/lib" "$root/home/.claude" # no preload lib present
+  # A prior install left a now-missing preload path; with no lib found the merge
+  # must clear it, not leave subprocess exec armed with a missing library.
+  printf '{"env":{"FOO":"bar","LD_PRELOAD":"/gone/libtermux-exec-ld-preload.so"}}\n' \
+    >"$root/home/.claude/settings.json"
+  _run_isolated_postinst "$root"
+  s="$root/home/.claude/settings.json"
+  assertEquals 'stale LD_PRELOAD removed when no lib found' false \
+    "$(jq -c '.env | has("LD_PRELOAD")' "$s")"
+  assertEquals 'unrelated env keys preserved' bar "$(jq -r '.env.FOO' "$s")"
+  rm -rf "$root"
+}
+
 # --- Native-path symlink ----------------------------------------------------
 # postinst symlinks ~/.local/bin/claude → the launcher (not the patched binary)
 # so Claude's installMethod=native health check passes with the env setup intact.
