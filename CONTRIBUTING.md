@@ -38,8 +38,9 @@ the generated `hk:*` tasks in `mise.tasks.toml`:
 - `mise run hk:all` — run the hk hooks over all files (autofixes locally, checks
   in CI). `mise run hk:base [ref]` runs them over files changed from a base ref
   (default `origin/main`). Append `-- -S <step>` to target one step.
-- `mise run check` — the fast local gate: the hk hooks plus the C launcher
-  unit tests (`test:fast`). No Docker.
+- `mise run check` — the fast local gate: the hk hooks plus the host-native
+  unit suites (`test:fast` → the C launcher via greatest + `install.sh`'s
+  helpers via shUnit2). No Docker.
 - `mise run compile [version]` — compile the launcher and assemble the `.deb`
   (→ `artifacts/packages/`). `version` is optional; empty derives the local
   CalVer (`scripts/version.sh`, run number `0`).

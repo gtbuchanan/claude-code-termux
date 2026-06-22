@@ -19,8 +19,6 @@
 # Anthropic's Commercial Terms of Service:
 #   https://www.anthropic.com/legal/commercial-terms
 #
-set -euo pipefail
-
 REPO="gtbuchanan/claude-code-termux"
 API="https://api.github.com/repos/$REPO/releases/latest"
 
@@ -30,66 +28,88 @@ die() {
   exit 1
 }
 
-command -v curl >/dev/null 2>&1 || die "missing 'curl' — pkg install curl"
-command -v apt-get >/dev/null 2>&1 || die "apt-get not found — this installer is for Termux."
-
-deb="${CLAUDE_CODE_DEB:-}"
-if [ -n "$deb" ]; then
-  [ -f "$deb" ] || die "CLAUDE_CODE_DEB not found: $deb"
-  log "Installing local package $deb"
-else
-  log "Resolving the latest release of $REPO…"
-  api=$(curl -fsSL "$API") ||
-    die "could not reach the GitHub API (network down or rate limited)."
-  # Pull the .deb's download URL and its asset digest out of the release JSON.
-  # jq isn't a guaranteed dependency yet here (apt installs it later), so this
-  # stays grep/sed. `|| true`: a no-match grep exits 1, which under pipefail
-  # would abort; an absent value is handled by the checks below.
-  url=$(printf '%s' "$api" |
+# Extract the aarch64 .deb's browser_download_url from GitHub release JSON ($1).
+# grep/sed, not jq: jq is only pulled in later as a package dependency. `|| true`
+# keeps a no-match grep from tripping main's pipefail; main handles the empty.
+asset_url() {
+  printf '%s' "$1" |
     { grep -oE '"browser_download_url"[[:space:]]*:[[:space:]]*"[^"]*_aarch64\.deb"' || true; } |
     head -1 |
-    sed -E 's/.*"(https[^"]+)"$/\1/')
-  [ -n "$url" ] ||
-    die "no aarch64 .deb asset in the latest release (GitHub API error or rate limit?)."
+    sed -E 's/.*"(https[^"]+)"$/\1/'
+}
 
-  deb=$(mktemp --suffix=.deb)
-  trap 'rm -f "$deb"' EXIT
-  log "Downloading $url"
-  curl -fsSL "$url" -o "$deb"
-
-  # Verify the download against the release asset's digest. GitHub records a
-  # sha256 for every release asset, and this repo uses immutable releases, so it
-  # can't change after publish. A mismatch aborts before install, since the .deb
-  # runs a postinst and patches binaries. The release publishes a single .deb
-  # asset, so its digest is the only one in the JSON. (Assets from before GitHub
-  # exposed digests fall back to a warning.)
-  digest=$(printf '%s' "$api" |
+# Extract the .deb asset's sha256 digest from GitHub release JSON ($1). GitHub
+# records a sha256 for every release asset and this repo's releases are
+# immutable, so it can't change after publish; the lone .deb asset means its is
+# the only digest in the JSON. Same grep/sed-not-jq and `|| true` rationale as
+# asset_url; an absent digest (assets predating GitHub's digest field) is
+# handled by main as a skip-with-warning.
+asset_digest() {
+  printf '%s' "$1" |
     { grep -oE '"digest"[[:space:]]*:[[:space:]]*"sha256:[0-9a-f]{64}"' || true; } |
     head -1 |
-    sed -E 's/.*"sha256:([0-9a-f]{64})".*/\1/')
-  if [ -n "$digest" ]; then
-    log "Verifying checksum…"
-    actual=$(sha256sum "$deb" | cut -d' ' -f1)
-    [ "$actual" = "$digest" ] ||
-      die "checksum mismatch for $(basename "$url"): expected $digest, got $actual."
-    log "Checksum OK."
+    sed -E 's/.*"sha256:([0-9a-f]{64})".*/\1/'
+}
+
+main() {
+  set -euo pipefail
+
+  command -v curl >/dev/null 2>&1 || die "missing 'curl' — pkg install curl"
+  command -v apt-get >/dev/null 2>&1 || die "apt-get not found — this installer is for Termux."
+
+  # Not `local`: the EXIT trap below fires after main() returns and reads $deb,
+  # which a local would put out of scope (unbound under set -u).
+  deb="${CLAUDE_CODE_DEB:-}"
+  if [ -n "$deb" ]; then
+    [ -f "$deb" ] || die "CLAUDE_CODE_DEB not found: $deb"
+    log "Installing local package $deb"
   else
-    log "warning: release asset has no digest; skipping checksum verification."
+    log "Resolving the latest release of $REPO…"
+    local api url digest actual
+    api=$(curl -fsSL "$API") ||
+      die "could not reach the GitHub API (network down or rate limited)."
+    url=$(asset_url "$api")
+    [ -n "$url" ] || die "no aarch64 .deb asset found in the latest release."
+
+    deb=$(mktemp --suffix=.deb)
+    trap 'rm -f -- "$deb"' EXIT
+    log "Downloading $url"
+    curl -fsSL "$url" -o "$deb"
+
+    # Verify the download against the release asset's digest. A mismatch aborts
+    # before install, since the .deb runs a postinst that patches binaries.
+    digest=$(asset_digest "$api")
+    if [ -n "$digest" ]; then
+      log "Verifying checksum…"
+      actual=$(sha256sum "$deb" | cut -d' ' -f1)
+      [ "$actual" = "$digest" ] ||
+        die "checksum mismatch for $(basename "$url"): expected $digest, got $actual."
+      log "Checksum OK."
+    else
+      log "warning: release asset has no digest; skipping checksum verification."
+    fi
   fi
-fi
 
-# glibc-runner and patchelf-glibc live in the glibc-packages repo, which the
-# `glibc-repo` package enables. It must be added (and the index refreshed)
-# BEFORE installing the package — apt resolves the whole dependency graph up
-# front, so a repo added mid-transaction wouldn't be consulted.
-log "Enabling the glibc package repo…"
-apt-get update -y || true
-apt-get install -y glibc-repo
-apt-get update -y
+  # glibc-runner and patchelf-glibc live in the glibc-packages repo, which the
+  # `glibc-repo` package enables. It must be added (and the index refreshed)
+  # BEFORE installing the package — apt resolves the whole dependency graph up
+  # front, so a repo added mid-transaction wouldn't be consulted.
+  log "Enabling the glibc package repo…"
+  apt-get update -y || true
+  apt-get install -y glibc-repo
+  apt-get update -y
 
-# apt reads the package's Depends and pulls glibc-runner, patchelf-glibc, jq,
-# and python3 automatically (dpkg -i would not).
-log "Installing (apt resolves dependencies)…"
-apt-get install -y "$deb"
+  # apt reads the package's Depends and pulls glibc-runner, patchelf-glibc, jq,
+  # and python3 automatically (dpkg -i would not).
+  log "Installing (apt resolves dependencies)…"
+  apt-get install -y "$deb"
 
-log "Done. Run 'claude' to start."
+  log "Done. Run 'claude' to start."
+}
+
+# Run the installer, unless this file is being sourced by the unit test for its
+# helper functions (which sets CLAUDE_CODE_INSTALL_LIB). A piped `curl … | bash`
+# leaves the var unset — and since BASH_SOURCE is empty in that case the usual
+# "${BASH_SOURCE[0]}" = "$0" guard would wrongly skip the install — so the
+# normal one-liner still runs main.
+[ -n "${CLAUDE_CODE_INSTALL_LIB:-}" ] || main "$@"
