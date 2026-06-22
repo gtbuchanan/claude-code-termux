@@ -89,9 +89,12 @@ oneTimeSetUp() {
   # Probe whose BINARY is `env`, so the TMPDIR tests can read the environment the
   # wrapper hands to the exec'd process. It must be named `env`: the wrapper
   # preserves argv[0], and Termux's `env` is the coreutils multiplexer that
-  # dispatches on argv[0]'s basename.
+  # dispatches on argv[0]'s basename. UNAME_SHIM points at the installed shim
+  # (already staged by the install above) — the wrapper LD_PRELOADs it, and
+  # bionic's linker aborts on a missing preload.
   probe="$(mktemp -d)/env"
   clang -O2 -DBINARY="\"$PREFIX/bin/env\"" -DTMPDIR_PATH="\"/PROBE_TMPDIR\"" \
+    -DUNAME_SHIM="\"$PREFIX/lib/claude-code-termux/uname-spoof.so\"" \
     -o "$probe" src/claude-wrapper.c >&2 || fatal "probe compile failed"
 }
 
@@ -159,6 +162,22 @@ test_native_symlink_targets_launcher() {
 test_startup() {
   assertTrue 'startup: claude --version' \
     "'$PREFIX/bin/claude' --version >/dev/null 2>&1"
+}
+
+# Runtime-init crash guard. `--version`/`--help` are fast paths that exit before
+# Bun spins up its event loop, so they stay green even when the bundled runtime
+# can't boot on this kernel — exactly how Claude 2.1.181's Bun 1.4.0 bump
+# (epoll_pwait2 with no ENOSYS fallback, bun#32489) slipped past CI as a
+# segfault-at-startup ("Bun has crashed") for every real session while
+# `claude --version` kept exiting 0. `mcp list` boots the full runtime (event
+# loop + HTTP thread) and exits cleanly with no servers configured — no network
+# or API auth — so a future runtime that can't start on Termux fails the build
+# instead of shipping. See anthropics/claude-code#50270.
+test_startup_boots_runtime() {
+  local out
+  out=$("$PREFIX/bin/claude" mcp list 2>&1)
+  assertEquals 'mcp list boots the runtime and exits 0' 0 "$?"
+  assertNotContains 'runtime boots without a Bun crash' "$out" 'Bun has crashed'
 }
 
 # grep/find dispatch: Claude routes its embedded tools by argv[0]. The compiled

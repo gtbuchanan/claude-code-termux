@@ -8,12 +8,13 @@
  * wrapper would arrive as argv[0]="…/bash". execv() preserves argv verbatim.
  *
  * The wrapper is itself a bionic binary, so Termux's libtermux-exec loads into
- * it cleanly; it then clears LD_PRELOAD before exec'ing the glibc Claude binary
- * (whose ld.so would otherwise choke on termux-exec's unversioned libc.so).
+ * it cleanly; it then overwrites LD_PRELOAD with the uname shim before exec'ing
+ * the glibc Claude binary (see the LD_PRELOAD comment in claude_wrapper_run).
  *
- * BINARY (the absolute path to the patched Claude Code binary) and TMPDIR_PATH
- * (the Termux prefix tmp dir) are baked in at compile time via -DBINARY="…" and
- * -DTMPDIR_PATH="…".
+ * BINARY (the absolute path to the patched Claude Code binary), TMPDIR_PATH (the
+ * Termux prefix tmp dir), and UNAME_SHIM (the absolute path to the uname-spoof
+ * .so) are baked in at compile time via -DBINARY="…", -DTMPDIR_PATH="…", and
+ * -DUNAME_SHIM="…".
  */
 #include <errno.h>
 #include <stdio.h>
@@ -27,6 +28,11 @@
 
 #ifndef TMPDIR_PATH
 #error "TMPDIR_PATH must be defined at compile time (-DTMPDIR_PATH=\"/…/tmp\")"
+#endif
+
+#ifndef UNAME_SHIM
+#error                                                                         \
+    "UNAME_SHIM must be defined at compile time (-DUNAME_SHIM=\"/…/uname-spoof.so\")"
 #endif
 
 /*
@@ -61,7 +67,14 @@ int claude_wrapper_run(int argc, char **argv,
      second, settings-independent layer that travels with every launch.
      overwrite=0 so an explicit user value still wins. */
   (void)setenv("DISABLE_AUTOUPDATER", "1", 0);
-  (void)unsetenv("LD_PRELOAD");
+  /* Replace (not clear) LD_PRELOAD with the uname shim. termux-exec's
+     unversioned libc.so text-script crashes the glibc binary's ld.so, so it
+     must not survive into the exec — and overwriting the variable both evicts
+     it and preloads our interposer, which reports a < 5.11 kernel so Bun avoids
+     the epoll_pwait2 startup segfault (bun#32489; see src/uname-shim.c).
+     overwrite=1: whatever was inherited (termux-exec, or a stale value) is
+     intentionally displaced. */
+  (void)setenv("LD_PRELOAD", UNAME_SHIM, 1);
   exec(BINARY, argv);
   fprintf(stderr, "claude wrapper: execv %s failed: %s\n", BINARY,
           strerror(errno));
