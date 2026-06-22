@@ -39,12 +39,16 @@ static long raw_uname(struct utsname *buf) {
 }
 
 int uname(struct utsname *buf) {
-  long rc = raw_uname(buf);
-  if (rc == 0) {
-    static const char release[] = "5.10.0";
-    for (unsigned i = 0; i < sizeof(release); i++) {
-      buf->release[i] = release[i];
-    }
+  /* The raw syscall returns 0 or a negative errno; normalize to the libc
+     contract (0 / -1) so callers checking for -1 aren't fooled by a raw -errno.
+     errno itself is left unset — failure (only EFAULT here) is unreachable with
+     a valid buffer, and setting it would pull in the libc TLS we avoid. */
+  if (raw_uname(buf) != 0) {
+    return -1;
   }
-  return (int)rc;
+  static const char release[] = "5.10.0";
+  for (unsigned i = 0; i < sizeof(release); i++) {
+    buf->release[i] = release[i];
+  }
+  return 0;
 }
