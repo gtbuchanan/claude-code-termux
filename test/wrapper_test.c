@@ -9,8 +9,9 @@
  * wrapper is compiled with -DCLAUDE_WRAPPER_NO_MAIN so its main() doesn't
  * collide with greatest's here.
  *
- * BINARY and TMPDIR_PATH are the sentinel literals baked into the wrapper (see
- * scripts/test-wrapper.sh); they need not exist on disk because exec is faked.
+ * BINARY, TMPDIR_PATH, and UNAME_SHIM are the sentinel literals baked into the
+ * wrapper (see mise-tasks/test/fast); they need not exist on disk because exec
+ * is faked.
  */
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -138,16 +139,18 @@ TEST preserves_existing_disable_autoupdater(void) {
 
 /*
  * termux-exec is preloaded into every Termux shell; its text-script libc.so
- * crashes the glibc binary's ld.so, so the wrapper must clear LD_PRELOAD before
- * the handoff.
+ * crashes the glibc binary's ld.so. The wrapper overwrites LD_PRELOAD with the
+ * uname shim — evicting termux-exec AND preloading the interposer that keeps Bun
+ * off the crashing epoll_pwait2 path (bun#32489). An inherited value is
+ * displaced, not preserved.
  */
-TEST clears_ld_preload(void) {
+TEST sets_ld_preload_to_uname_shim(void) {
   reset_fixture();
   setenv("LD_PRELOAD", "/usr/lib/libtermux-exec-ld-preload.so", 1);
   char *argv[] = {"claude", NULL};
   claude_wrapper_run(1, argv, recording_exec);
 
-  ASSERT(getenv("LD_PRELOAD") == NULL);
+  ASSERT_STR_EQ(UNAME_SHIM, env_or_empty("LD_PRELOAD"));
   PASS();
 }
 
@@ -181,7 +184,7 @@ int main(int argc, char **argv) {
   RUN_TEST(preserves_existing_tmpdirs);
   RUN_TEST(sets_disable_autoupdater_when_unset);
   RUN_TEST(preserves_existing_disable_autoupdater);
-  RUN_TEST(clears_ld_preload);
+  RUN_TEST(sets_ld_preload_to_uname_shim);
   RUN_TEST(exec_failure_returns_127);
   GREATEST_MAIN_END();
 }

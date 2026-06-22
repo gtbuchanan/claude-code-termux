@@ -77,10 +77,13 @@ re-downloaded. Leave it empty (the default) to disable caching.
    (`patchelf`), and blanks the subprocess `CLAUDE_CODE_EXECPATH` assignment
    (`patch-execpath.py`) so embedded-tool re-execs route back through the
    launcher.
-1. The compiled launcher execs the patched binary with `LD_PRELOAD` cleared,
-   preserving `argv[0]` so Claude's `grep`/`find`/`rg` dispatch works, and sets
-   `TMPDIR`/`CLAUDE_CODE_TMPDIR` to the Termux prefix (only when unset) since
-   Termux has no writable `/tmp`.
+1. The compiled launcher execs the patched binary, preserving `argv[0]` so
+   Claude's `grep`/`find`/`rg` dispatch works. It overwrites `LD_PRELOAD` with a
+   small `uname` shim: this evicts termux-exec's `libc.so` (which the glibc
+   binary's loader can't load) and reports a `< 5.11` kernel so the bundled Bun
+   skips an `epoll_pwait2` path that otherwise segfaults at startup on newer
+   Android kernels (bun#32489). It also sets `TMPDIR`/`CLAUDE_CODE_TMPDIR` to the
+   Termux prefix (only when unset) since Termux has no writable `/tmp`.
 1. The postinstall also symlinks the launcher onto Anthropic's native-install
    path (`~/.local/bin/claude`) so Claude's health check passes when it detects
    `installMethod: native`. The symlink targets the launcher (not the patched
@@ -116,6 +119,47 @@ shebang — there is no termux-exec preload inside the glibc claude process.
   `TMPDIR`/`CLAUDE_CODE_TMPDIR` at the Termux prefix, which covers Claude's
   `os.tmpdir()` resolver and its sandbox subprocess. See
   [anthropics/claude-code#15637](https://github.com/anthropics/claude-code/issues/15637).
+
+## Troubleshooting
+
+### `claude: cannot execute: required file not found`
+
+The `claude` being run is an **unpatched stock glibc binary**: its ELF
+interpreter points at `/lib/ld-linux-aarch64.so.1`, which doesn't exist on
+Termux, so the kernel refuses to exec it. This package patches the interpreter
+to Termux's glibc loader; the error means an unpatched binary is being resolved
+instead.
+
+It comes from Anthropic's **native installer** having run
+(`npm i -g @anthropic-ai/claude-code` or `claude install`): that writes a stock
+binary under `~/.local/share/claude/versions/` and repoints `~/.local/bin/claude`
+at it, shadowing this package's launcher.
+
+Fix it with:
+
+```bash
+claude-code-termux-update
+```
+
+The native installer leaves `~/.local/bin/claude` as a symlink into
+`~/.local/share/claude/versions/`, so this re-applies the ELF patch and
+reconciles that path back onto the launcher in one step.
+
+The stale stock binary it leaves under `~/.local/share/claude/versions/` is then
+unreferenced and safe to remove.
+
+### Claude Code can't run on this device
+
+On some Android setups the kernel won't launch the glibc binary Anthropic ships,
+even after this package patches its ELF interpreter — the install detects this
+and stops. First make sure Termux and `termux-exec` are fully up to date (older
+`termux-exec` can't route execs the way newer Android requires) and retry. If it
+still fails, the patch-and-exec approach this package relies on can't run here;
+use an older, JavaScript-based Claude Code instead:
+
+```bash
+npm install -g @anthropic-ai/claude-code@2.1.112
+```
 
 ## Consumer setup (dotfiles)
 

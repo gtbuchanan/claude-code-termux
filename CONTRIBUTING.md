@@ -30,14 +30,15 @@ the regenerated `mise.lock` alongside any tool change.
 
 ## Tasks
 
-The dev workflow runs through file-based mise tasks in `mise-tasks/`:
+The dev workflow runs through mise tasks — file-based under `mise-tasks/`, plus
+the generated `hk:*` tasks in `mise.tasks.toml`:
 
-- `mise run bootstrap` — install the prek git hooks. Run once after cloning so
-  the hooks fire on `git commit`.
-- `mise run pre-commit:{staged,pr,all}` — run the prek hooks
-  (`.pre-commit-config.yaml`) scoped to staged changes, this branch vs
-  `origin/main`, or all files. Append `-- <hook-id>` to target one hook.
-- `mise run check` — the fast local gate: the prek hooks plus the C launcher
+- `mise install` — install the pinned tools; the `hk install --mise` postinstall
+  wires up hk's Git hooks so they fire on `git commit`. Run once after cloning.
+- `mise run hk:all` — run the hk hooks over all files (autofixes locally, checks
+  in CI). `mise run hk:base [ref]` runs them over files changed from a base ref
+  (default `origin/main`). Append `-- -S <step>` to target one step.
+- `mise run check` — the fast local gate: the hk hooks plus the C launcher
   unit tests (`test:fast`). No Docker.
 - `mise run compile [version]` — compile the launcher and assemble the `.deb`
   (→ `artifacts/packages/`). `version` is optional; empty derives the local

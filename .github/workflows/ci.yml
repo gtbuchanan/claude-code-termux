@@ -19,13 +19,11 @@ jobs:
     name: Pre-Commit
     # The reusable diffs changed files against the PR base, so it only runs on
     # pull_request. Push / schedule invocations (cd.yml, release-watch.yml) have
-    # no base_ref — skip rather than hand prek empty --from-ref/--to-ref.
+    # no base_ref — skip rather than run hk over an empty diff range.
     if: github.event_name == 'pull_request'
-    # use-pnpm defaults to false: this repo is node-free, so prek runs alone.
-    # Pinned to the last prek-based reusable (tooling#141); @main migrated to
-    # hk (tooling#157) which this repo hasn't adopted yet. Bump to @main once
-    # we migrate to hk.
-    uses: gtbuchanan/tooling/.github/workflows/pre-commit.yml@9a77ff5450826237f7a7250bb98e6010847d4521
+    # use-pnpm defaults to false: this repo is node-free (the hk:base task pulls
+    # gtb and the linters from mise), so hk runs without a pnpm install.
+    uses: gtbuchanan/tooling/.github/workflows/pre-commit.yml@main
 
   unit:
     name: Unit Tests

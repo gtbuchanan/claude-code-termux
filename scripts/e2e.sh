@@ -89,9 +89,12 @@ oneTimeSetUp() {
   # Probe whose BINARY is `env`, so the TMPDIR tests can read the environment the
   # wrapper hands to the exec'd process. It must be named `env`: the wrapper
   # preserves argv[0], and Termux's `env` is the coreutils multiplexer that
-  # dispatches on argv[0]'s basename.
+  # dispatches on argv[0]'s basename. UNAME_SHIM points at the installed shim
+  # (already staged by the install above) — the wrapper LD_PRELOADs it, and
+  # bionic's linker aborts on a missing preload.
   probe="$(mktemp -d)/env"
   clang -O2 -DBINARY="\"$PREFIX/bin/env\"" -DTMPDIR_PATH="\"/PROBE_TMPDIR\"" \
+    -DUNAME_SHIM="\"$PREFIX/lib/claude-code-termux/uname-spoof.so\"" \
     -o "$probe" src/claude-wrapper.c >&2 || fatal "probe compile failed"
 }
 
@@ -144,6 +147,61 @@ test_settings_preserves_existing_keys() {
     "jq -e '.permissions.allow | index(\"Bash(echo:*)\")' '$settings' >/dev/null"
 }
 
+# postinst resolves the termux-exec preload lib by name, since it varies across
+# termux-exec versions (libtermux-exec-ld-preload.so on 2.x, only the legacy
+# libtermux-exec.so on 1.x). The install above already covered the modern name;
+# these drive postinst in an isolated PREFIX/HOME — with the post-merge steps
+# (link-native, bootstrap ensure) stubbed out — so only the settings merge runs,
+# exercising the fallback and the no-lib branch without network or real state.
+_run_isolated_postinst() { # $1 = fake root; caller pre-creates $1/lib/*
+  local root="$1"
+  mkdir -p "$root/libexec/claude-code-termux" "$root/home"
+  printf '#!%s\nexit 0\n' "$PREFIX/bin/bash" \
+    >"$root/libexec/claude-code-termux/link-native.sh"
+  printf '#!%s\nexit 0\n' "$PREFIX/bin/bash" \
+    >"$root/libexec/claude-code-termux/bootstrap.sh"
+  chmod +x "$root/libexec/claude-code-termux/"*.sh
+  PREFIX="$root" HOME="$root/home" bash "$PWD/package/postinst" configure 2>/dev/null
+}
+test_postinst_falls_back_to_legacy_preload_lib() {
+  local root
+  root=$(mktemp -d)
+  mkdir -p "$root/lib"
+  : >"$root/lib/libtermux-exec.so" # only the legacy name present
+  _run_isolated_postinst "$root"
+  assertEquals 'falls back to legacy libtermux-exec.so when modern name absent' \
+    "$root/lib/libtermux-exec.so" \
+    "$(jq -r '.env.LD_PRELOAD' "$root/home/.claude/settings.json")"
+  rm -rf "$root"
+}
+test_postinst_skips_preload_when_no_lib() {
+  local root s
+  root=$(mktemp -d)
+  mkdir -p "$root/lib" # no preload lib at all
+  _run_isolated_postinst "$root"
+  s="$root/home/.claude/settings.json"
+  assertEquals 'no LD_PRELOAD written when no termux-exec lib found' false \
+    "$(jq -c '(.env // {}) | has("LD_PRELOAD")' "$s")"
+  assertTrue 'autoUpdates still disabled when no lib found' \
+    "jq -e '.autoUpdates == false' '$s' >/dev/null"
+  rm -rf "$root"
+}
+test_postinst_clears_stale_preload_when_no_lib() {
+  local root s
+  root=$(mktemp -d)
+  mkdir -p "$root/lib" "$root/home/.claude" # no preload lib present
+  # A prior install left a now-missing preload path; with no lib found the merge
+  # must clear it, not leave subprocess exec armed with a missing library.
+  printf '{"env":{"FOO":"bar","LD_PRELOAD":"/gone/libtermux-exec-ld-preload.so"}}\n' \
+    >"$root/home/.claude/settings.json"
+  _run_isolated_postinst "$root"
+  s="$root/home/.claude/settings.json"
+  assertEquals 'stale LD_PRELOAD removed when no lib found' false \
+    "$(jq -c '.env | has("LD_PRELOAD")' "$s")"
+  assertEquals 'unrelated env keys preserved' bar "$(jq -r '.env.FOO' "$s")"
+  rm -rf "$root"
+}
+
 # --- Native-path symlink ----------------------------------------------------
 # postinst symlinks ~/.local/bin/claude → the launcher (not the patched binary)
 # so Claude's installMethod=native health check passes with the env setup intact.
@@ -159,6 +217,22 @@ test_native_symlink_targets_launcher() {
 test_startup() {
   assertTrue 'startup: claude --version' \
     "'$PREFIX/bin/claude' --version >/dev/null 2>&1"
+}
+
+# Runtime-init crash guard. `--version`/`--help` are fast paths that exit before
+# Bun spins up its event loop, so they stay green even when the bundled runtime
+# can't boot on this kernel — exactly how Claude 2.1.181's Bun 1.4.0 bump
+# (epoll_pwait2 with no ENOSYS fallback, bun#32489) slipped past CI as a
+# segfault-at-startup ("Bun has crashed") for every real session while
+# `claude --version` kept exiting 0. `mcp list` boots the full runtime (event
+# loop + HTTP thread) and exits cleanly with no servers configured — no network
+# or API auth — so a future runtime that can't start on Termux fails the build
+# instead of shipping. See anthropics/claude-code#50270.
+test_startup_boots_runtime() {
+  local out
+  out=$("$PREFIX/bin/claude" mcp list 2>&1)
+  assertEquals 'mcp list boots the runtime and exits 0' 0 "$?"
+  assertNotContains 'runtime boots without a Bun crash' "$out" 'Bun has crashed'
 }
 
 # grep/find dispatch: Claude routes its embedded tools by argv[0]. The compiled
@@ -215,6 +289,36 @@ test_update_short_circuits_on_same_version() {
   out=$(CLAUDE_CODE_VERSION="${installed#claude-}" claude-code-termux-update 2>&1)
   assertEquals 'update short-circuit exits successfully' 0 "$?"
   assertContains 'update short-circuits on same version' "$out" 'already current'
+}
+
+# Preflight: when the device can't exec a patched-interpreter glibc binary, the
+# fetch must abort with a clear message BEFORE the multi-MB download rather than
+# failing mid-patch. Drive bootstrap against a stub patchelf that emits the
+# kernel's rejection signature, in an isolated PREFIX/GLIBC_PREFIX so no real
+# state or network is touched (version pinned → no release lookup; the abort
+# lands before any download).
+test_preflight_aborts_when_glibc_exec_fails() {
+  local fake out
+  fake=$(mktemp -d)
+  mkdir -p "$fake/glibc/bin" "$fake/glibc/lib" "$fake/opt/claude-code-termux"
+  cat >"$fake/glibc/bin/patchelf" <<EOF
+#!$PREFIX/bin/bash
+echo 'CANNOT LINK EXECUTABLE "x": library "libstdc++.so.6" not found' >&2
+exit 1
+EOF
+  chmod +x "$fake/glibc/bin/patchelf"
+  : >"$fake/glibc/lib/ld-linux-aarch64.so.1"
+  # Resolve the (installed) bootstrap path up front: the inline assignments below
+  # set the child's environment, so referencing $PREFIX in the same command would
+  # see the real prefix, not $fake (and shellcheck SC2097/SC2098 would flag it).
+  local boot="$PREFIX/libexec/claude-code-termux/bootstrap.sh"
+  out=$(PREFIX="$fake" GLIBC_PREFIX="$fake/glibc" CLAUDE_CODE_VERSION=9.9.9 \
+    "$boot" --force 2>&1)
+  assertNotEquals 'preflight aborts with non-zero status' 0 "$?"
+  assertContains 'preflight surfaces the cannot-run message' \
+    "$out" "can't run on this device"
+  assertNotContains 'preflight aborts before downloading' "$out" 'Downloading'
+  rm -rf "$fake"
 }
 
 # --- State-mutating checks (kept last; order matters) -----------------------

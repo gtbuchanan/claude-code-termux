@@ -13,9 +13,22 @@ set -e
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 : "${HOME:=$PREFIX/../home}"
 SETTINGS="${CLAUDE_CODE_SETTINGS:-$HOME/.claude/settings.json}"
-TERMUX_EXEC_LIB="$PREFIX/lib/libtermux-exec-ld-preload.so"
 BOOTSTRAP="$PREFIX/libexec/claude-code-termux/bootstrap.sh"
 LINK_NATIVE="$PREFIX/libexec/claude-code-termux/link-native.sh"
+
+# termux-exec's LD_PRELOAD interposer is named `libtermux-exec-ld-preload.so` on
+# modern (2.x) termux-exec and `libtermux-exec.so` on older (1.x). Echo the first
+# that exists so we never bake a missing path into settings.json.
+detect_termux_exec_lib() {
+  local name
+  for name in libtermux-exec-ld-preload.so libtermux-exec.so; do
+    if [ -e "$PREFIX/lib/$name" ]; then
+      printf '%s' "$PREFIX/lib/$name"
+      return 0
+    fi
+  done
+  return 1
+}
 
 case "$1" in
 configure)
@@ -29,10 +42,17 @@ configure)
   if [ -z "${CLAUDE_CODE_SKIP_SETTINGS:-}" ] && command -v jq >/dev/null 2>&1; then
     mkdir -p "$(dirname "$SETTINGS")"
     [ -f "$SETTINGS" ] || printf '{}\n' >"$SETTINGS"
+    # Empty if none found; the jq below then deletes any env.LD_PRELOAD so a
+    # stale path from an older install can't keep re-arming subprocesses with a
+    # missing library (del is a no-op when absent, and won't create an empty env).
+    termux_exec_lib="$(detect_termux_exec_lib || true)"
+    [ -n "$termux_exec_lib" ] ||
+      echo "claude-code-termux: no termux-exec preload lib found in $PREFIX/lib; subprocess exec re-arming skipped." >&2
     tmp=$(mktemp)
-    if jq --arg preload "$TERMUX_EXEC_LIB" '
+    if jq --arg preload "$termux_exec_lib" '
             .autoUpdates = false
-          | .env = ((.env // {}) + {LD_PRELOAD: $preload})
+          | if $preload == "" then del(.env.LD_PRELOAD)
+            else .env = ((.env // {}) + {LD_PRELOAD: $preload}) end
         ' "$SETTINGS" >"$tmp" 2>/dev/null; then
       mv "$tmp" "$SETTINGS"
     else
