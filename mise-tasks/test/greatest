@@ -10,7 +10,7 @@
 # exec handoff (the seam in claude-wrapper.c), so a native build exercises the
 # real logic.
 #
-#   mise run test:greatest [-- greatest args, e.g. -v]
+#   mise run test:greatest [-- greatest args]   # defaults to -v (per-test names)
 #
 set -euo pipefail
 
@@ -39,4 +39,6 @@ zig cc -O2 -Wall -Wextra -Werror \
   -o "$bin" \
   "$MISE_PROJECT_ROOT/src/claude-wrapper.c" "$MISE_PROJECT_ROOT/test/wrapper_test.c"
 
-"$bin" "$@"
+# Default to -v (greatest lists each test by name; its bare default is a compact
+# dot summary). Explicit args override — e.g. a `-t <name>` filter.
+"$bin" "${@:--v}"

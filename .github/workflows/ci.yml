@@ -35,8 +35,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: gtbuchanan/tooling/.github/actions/mise-setup@main
-      # -v lists each test by name in the log (default is a compact summary).
-      - run: mise run test:fast -- -v
+      - run: mise run test:fast
 
   # Native arm64 runner (free for public repos) → the aarch64 container runs
   # without QEMU. Split into two jobs so a compile break and an install/behavior

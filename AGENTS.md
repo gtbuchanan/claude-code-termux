@@ -98,8 +98,7 @@ hosts and the Linux CI runner.
 - `mise run test:fast` — the fast, host-native unit suites (no Termux/Docker,
   milliseconds); an aggregator over two focused tasks you can also run alone:
   - `mise run test:greatest` — the C launcher: compiles `src/claude-wrapper.c`
-    with mise's `zig` and runs it directly. Append `-- -v` for per-test greatest
-    output.
+    with mise's `zig` and runs it directly (defaults to `-v`, per-test names).
   - `mise run test:shunit2` — `install.sh`'s pure helpers, via shUnit2.
 - `mise run check` — the fast local gate: the hk hooks (`hk:all`) plus
   the unit suites (`test:fast`). No Docker.
