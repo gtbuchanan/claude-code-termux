@@ -44,14 +44,27 @@ test_asset_url_extracts_aarch64_deb() {
     "$(asset_url "$(release_json)")"
 }
 
+# Run asset_url under pipefail — as main() does — and assert it yields no output
+# AND still exits 0. This is what proves the `|| true` guard: without it, the
+# no-match grep's non-zero status would trip pipefail and abort the install.
+assert_no_match_under_pipefail() { # $1 = message, $2 = release JSON
+  local out rc
+  out="$(
+    set -o pipefail
+    asset_url "$2"
+  )"
+  rc=$?
+  assertEquals "$1" '' "$out"
+  assertEquals "$1 (exits 0 under pipefail)" 0 "$rc"
+}
+
 test_asset_url_empty_when_no_aarch64_deb() {
-  assertEquals 'empty when the release has no aarch64 .deb asset' '' \
-    "$(asset_url '{"assets":[{"browser_download_url":"https://example.com/x.txt"}]}')"
+  assert_no_match_under_pipefail 'empty when the release has no aarch64 .deb asset' \
+    '{"assets":[{"browser_download_url":"https://example.com/x.txt"}]}'
 }
 
 test_asset_url_empty_on_non_json() {
-  assertEquals 'empty (no crash under pipefail) on a non-JSON blob' '' \
-    "$(asset_url 'this is not json')"
+  assert_no_match_under_pipefail 'empty on a non-JSON blob' 'this is not json'
 }
 
 # shUnit2 hands control here: it discovers the test_* functions above and prints

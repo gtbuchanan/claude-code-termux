@@ -44,7 +44,9 @@ main() {
   command -v curl >/dev/null 2>&1 || die "missing 'curl' — pkg install curl"
   command -v apt-get >/dev/null 2>&1 || die "apt-get not found — this installer is for Termux."
 
-  local deb="${CLAUDE_CODE_DEB:-}"
+  # Not `local`: the EXIT trap below fires after main() returns and reads $deb,
+  # which a local would put out of scope (unbound under set -u).
+  deb="${CLAUDE_CODE_DEB:-}"
   if [ -n "$deb" ]; then
     [ -f "$deb" ] || die "CLAUDE_CODE_DEB not found: $deb"
     log "Installing local package $deb"
@@ -57,7 +59,7 @@ main() {
     [ -n "$url" ] || die "no aarch64 .deb asset found in the latest release."
 
     deb=$(mktemp --suffix=.deb)
-    trap 'rm -f "$deb"' EXIT
+    trap 'rm -f -- "$deb"' EXIT
     log "Downloading $url"
     curl -fsSL "$url" -o "$deb"
   fi
