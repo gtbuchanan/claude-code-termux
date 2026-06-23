@@ -19,16 +19,17 @@ cd "$(dirname "$0")/.." || exit 1
 # shellcheck source=/dev/null
 CLAUDE_CODE_INSTALL_LIB=1 . ./install.sh
 
-# A release-JSON shape mirroring GitHub's, with a decoy asset (no .deb suffix, no
-# digest) before the aarch64 .deb so the selectors have to discriminate rather
-# than grab the first match.
+# A release-JSON shape mirroring GitHub's, with a decoy asset (no .deb suffix,
+# its own distinct digest) ordered before the aarch64 .deb so the selectors must
+# discriminate by asset — not just grab the first url/digest in the document.
 release_json() {
   cat <<'EOF'
 {
   "assets": [
     {
       "name": "release-notes.txt",
-      "browser_download_url": "https://github.com/gtbuchanan/claude-code-termux/releases/download/v2026.6.19/release-notes.txt"
+      "browser_download_url": "https://github.com/gtbuchanan/claude-code-termux/releases/download/v2026.6.19/release-notes.txt",
+      "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
     },
     {
       "name": "claude-code-termux_2026.6.19_aarch64.deb",

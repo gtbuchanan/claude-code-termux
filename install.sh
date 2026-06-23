@@ -38,14 +38,21 @@ asset_url() {
     sed -E 's/.*"(https[^"]+)"$/\1/'
 }
 
-# Extract the .deb asset's sha256 digest from GitHub release JSON ($1). GitHub
-# records a sha256 for every release asset and this repo's releases are
-# immutable, so it can't change after publish; the lone .deb asset means its is
-# the only digest in the JSON. Same grep/sed-not-jq and `|| true` rationale as
-# asset_url; an absent digest makes main abort (it only fetches the latest
+# Extract the aarch64 .deb asset's sha256 digest from GitHub release JSON ($1).
+# Digests are per-asset, so bind to the same asset asset_url picks rather than
+# grabbing the first digest in the document: flatten newlines, split the asset
+# array into one object per line, select the .deb object by its URL, then read
+# that object's digest. grep/sed, not jq (only pulled in later as a package
+# dependency). GitHub records a sha256 for every asset and this repo's releases
+# are immutable, so it can't change after publish. `|| true` tolerates a
+# no-match; an absent digest makes main abort (it only fetches the latest
 # release, which always carries one).
 asset_digest() {
   printf '%s' "$1" |
+    tr '\n' ' ' |
+    sed -E 's/\}[[:space:]]*,[[:space:]]*\{/}\n{/g' |
+    { grep -E '"browser_download_url"[[:space:]]*:[[:space:]]*"[^"]*_aarch64\.deb"' || true; } |
+    head -1 |
     { grep -oE '"digest"[[:space:]]*:[[:space:]]*"sha256:[0-9a-f]{64}"' || true; } |
     head -1 |
     sed -E 's/.*"sha256:([0-9a-f]{64})".*/\1/'
