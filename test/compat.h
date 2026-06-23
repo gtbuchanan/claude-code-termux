@@ -7,6 +7,9 @@
  * build to supply them; it is NEVER part of the shipped Termux build, so
  * production code stays free of host-portability cruft. On POSIX hosts the
  * block compiles to nothing and the real libc functions are used.
+ *
+ * The shims are `inline` so a translation unit that uses only one of them
+ * (e.g. claude-wrapper.c sets but never unsets) doesn't trip -Wunused-function.
  */
 #ifndef CLAUDE_WRAPPER_TEST_COMPAT_H
 #define CLAUDE_WRAPPER_TEST_COMPAT_H
@@ -14,7 +17,7 @@
 #if defined(_WIN32)
 #include <stdlib.h>
 
-static int setenv(const char *name, const char *value, int overwrite) {
+static inline int setenv(const char *name, const char *value, int overwrite) {
   if (!overwrite && getenv(name) != NULL) {
     return 0;
   }
@@ -22,7 +25,7 @@ static int setenv(const char *name, const char *value, int overwrite) {
 }
 
 /* _putenv_s(name, "") removes the variable on Windows (getenv → NULL). */
-static int unsetenv(const char *name) { return _putenv_s(name, ""); }
+static inline int unsetenv(const char *name) { return _putenv_s(name, ""); }
 #endif /* _WIN32 */
 
 #endif /* CLAUDE_WRAPPER_TEST_COMPAT_H */
