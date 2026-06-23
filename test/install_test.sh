@@ -19,19 +19,22 @@ cd "$(dirname "$0")/.." || exit 1
 # shellcheck source=/dev/null
 CLAUDE_CODE_INSTALL_LIB=1 . ./install.sh
 
-# A release-JSON shape mirroring GitHub's, with a decoy asset before the aarch64
-# .deb so the selector has to discriminate rather than grab the first URL.
+# A release-JSON shape mirroring GitHub's, with a decoy asset (no .deb suffix,
+# its own distinct digest) ordered before the aarch64 .deb so the selectors must
+# discriminate by asset — not just grab the first url/digest in the document.
 release_json() {
   cat <<'EOF'
 {
   "assets": [
     {
-      "name": "SHA256SUMS",
-      "browser_download_url": "https://github.com/gtbuchanan/claude-code-termux/releases/download/v2026.6.19/SHA256SUMS"
+      "name": "release-notes.txt",
+      "browser_download_url": "https://github.com/gtbuchanan/claude-code-termux/releases/download/v2026.6.19/release-notes.txt",
+      "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
     },
     {
       "name": "claude-code-termux_2026.6.19_aarch64.deb",
-      "browser_download_url": "https://github.com/gtbuchanan/claude-code-termux/releases/download/v2026.6.19/claude-code-termux_2026.6.19_aarch64.deb"
+      "browser_download_url": "https://github.com/gtbuchanan/claude-code-termux/releases/download/v2026.6.19/claude-code-termux_2026.6.19_aarch64.deb",
+      "digest": "sha256:6c5280d0a9fa52138097035b298e03fcb40e61001350a3492a8d70c35b2805a8"
     }
   ]
 }
@@ -44,27 +47,39 @@ test_asset_url_extracts_aarch64_deb() {
     "$(asset_url "$(release_json)")"
 }
 
-# Run asset_url under pipefail — as main() does — and assert it yields no output
-# AND still exits 0. This is what proves the `|| true` guard: without it, the
-# no-match grep's non-zero status would trip pipefail and abort the install.
-assert_no_match_under_pipefail() { # $1 = message, $2 = release JSON
+test_asset_digest_extracts_sha256() {
+  assertEquals 'extracts the .deb asset sha256 digest (bare hex, no prefix)' \
+    '6c5280d0a9fa52138097035b298e03fcb40e61001350a3492a8d70c35b2805a8' \
+    "$(asset_digest "$(release_json)")"
+}
+
+# Run helper $1 (asset_url|asset_digest) on JSON $3 under pipefail — as main()
+# does — and assert no output AND a 0 exit. Empty-with-success is what proves
+# the `|| true` guard: without it the no-match grep's non-zero status would trip
+# pipefail and abort the install.
+assert_empty_under_pipefail() { # $1 = helper, $2 = message, $3 = release JSON
   local out rc
   out="$(
     set -o pipefail
-    asset_url "$2"
+    "$1" "$3"
   )"
   rc=$?
-  assertEquals "$1" '' "$out"
-  assertEquals "$1 (exits 0 under pipefail)" 0 "$rc"
+  assertEquals "$2" '' "$out"
+  assertEquals "$2 (exits 0 under pipefail)" 0 "$rc"
 }
 
 test_asset_url_empty_when_no_aarch64_deb() {
-  assert_no_match_under_pipefail 'empty when the release has no aarch64 .deb asset' \
+  assert_empty_under_pipefail asset_url 'empty when the release has no aarch64 .deb asset' \
     '{"assets":[{"browser_download_url":"https://example.com/x.txt"}]}'
 }
 
 test_asset_url_empty_on_non_json() {
-  assert_no_match_under_pipefail 'empty on a non-JSON blob' 'this is not json'
+  assert_empty_under_pipefail asset_url 'empty on a non-JSON blob' 'this is not json'
+}
+
+test_asset_digest_empty_when_absent() {
+  assert_empty_under_pipefail asset_digest 'empty when the .deb asset has no digest' \
+    '{"assets":[{"browser_download_url":"https://example.com/x_aarch64.deb"}]}'
 }
 
 # shUnit2 hands control here: it discovers the test_* functions above and prints

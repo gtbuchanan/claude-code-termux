@@ -38,6 +38,26 @@ asset_url() {
     sed -E 's/.*"(https[^"]+)"$/\1/'
 }
 
+# Extract the aarch64 .deb asset's sha256 digest from GitHub release JSON ($1).
+# Digests are per-asset, so bind to the same asset asset_url picks rather than
+# grabbing the first digest in the document: flatten newlines, split the asset
+# array into one object per line, select the .deb object by its URL, then read
+# that object's digest. grep/sed, not jq (only pulled in later as a package
+# dependency). GitHub records a sha256 for every asset and this repo's releases
+# are immutable, so it can't change after publish. `|| true` tolerates a
+# no-match; an absent digest makes main abort (it only fetches the latest
+# release, which always carries one).
+asset_digest() {
+  printf '%s' "$1" |
+    tr '\n' ' ' |
+    sed -E 's/\}[[:space:]]*,[[:space:]]*\{/}\n{/g' |
+    { grep -E '"browser_download_url"[[:space:]]*:[[:space:]]*"[^"]*_aarch64\.deb"' || true; } |
+    head -1 |
+    { grep -oE '"digest"[[:space:]]*:[[:space:]]*"sha256:[0-9a-f]{64}"' || true; } |
+    head -1 |
+    sed -E 's/.*"sha256:([0-9a-f]{64})".*/\1/'
+}
+
 main() {
   set -euo pipefail
 
@@ -52,7 +72,7 @@ main() {
     log "Installing local package $deb"
   else
     log "Resolving the latest release of $REPO…"
-    local api url
+    local api url digest actual
     api=$(curl -fsSL "$API") ||
       die "could not reach the GitHub API (network down or rate limited)."
     url=$(asset_url "$api")
@@ -62,6 +82,20 @@ main() {
     trap 'rm -f -- "$deb"' EXIT
     log "Downloading $url"
     curl -fsSL "$url" -o "$deb"
+
+    # Verify the download against the release asset's digest before install,
+    # since the .deb runs a postinst that patches binaries. A missing digest
+    # aborts too: install.sh only fetches the latest release, which always
+    # carries one, so its absence means tampered or unexpected metadata — not a
+    # legitimately undigested asset — and skipping the check would defeat it.
+    digest=$(asset_digest "$api")
+    [ -n "$digest" ] ||
+      die "no sha256 digest for $(basename "$url") in the release metadata; refusing to install unverified."
+    log "Verifying checksum…"
+    actual=$(sha256sum "$deb" | cut -d' ' -f1)
+    [ "$actual" = "$digest" ] ||
+      die "checksum mismatch for $(basename "$url"): expected $digest, got $actual."
+    log "Checksum OK."
   fi
 
   # glibc-runner and patchelf-glibc live in the glibc-packages repo, which the
