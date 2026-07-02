@@ -33,6 +33,7 @@
  * aarch64 Termux only. See src/claude-wrapper.c for how the launcher preloads it
  * alongside uname-spoof.so.
  */
+#include <fcntl.h>
 #include <stdarg.h>
 
 #ifndef RESOLV_SRC
@@ -73,13 +74,20 @@ static const char *redirect(const char *path) {
 /*
  * Each interposer resolves the real libc function once (RTLD_NEXT = the next
  * definition after this preload = libc's) and forwards with the path rewritten.
- * The open family is variadic to match libc exactly; the optional mode_t is only
- * consulted by the kernel when O_CREAT/O_TMPFILE is set, so forwarding whatever
- * was passed (or an unused garbage arg otherwise) matches libc's own behavior.
+ * The open family is variadic to match libc exactly; the optional mode arg is
+ * present only for creating opens, so — like glibc's own open() — the va_arg is
+ * read ONLY then (needs_mode), never unconditionally (a va_arg the caller didn't
+ * pass is undefined behavior), and the mode is likewise forwarded only then.
  */
 typedef FILE *(*fopen_fn)(const char *, const char *);
 typedef int (*open_fn)(const char *, int, ...);
 typedef int (*openat_fn)(int, const char *, int, ...);
+
+/* Mirror glibc's __OPEN_NEEDS_MODE: a mode arg accompanies O_CREAT or O_TMPFILE
+   (the latter carries O_DIRECTORY too, so match the full bit pattern). */
+static int needs_mode(int flags) {
+  return (flags & O_CREAT) != 0 || (flags & O_TMPFILE) == O_TMPFILE;
+}
 
 FILE *fopen(const char *path, const char *mode) {
   static fopen_fn real = 0;
@@ -102,6 +110,9 @@ int open(const char *path, int flags, ...) {
   if (real == 0) {
     real = (open_fn)dlsym(RTLD_NEXT, "open");
   }
+  if (!needs_mode(flags)) {
+    return real(redirect(path), flags);
+  }
   va_list ap;
   va_start(ap, flags);
   int mode = va_arg(ap, int);
@@ -113,6 +124,9 @@ int open64(const char *path, int flags, ...) {
   static open_fn real = 0;
   if (real == 0) {
     real = (open_fn)dlsym(RTLD_NEXT, "open64");
+  }
+  if (!needs_mode(flags)) {
+    return real(redirect(path), flags);
   }
   va_list ap;
   va_start(ap, flags);
@@ -126,6 +140,9 @@ int openat(int dirfd, const char *path, int flags, ...) {
   if (real == 0) {
     real = (openat_fn)dlsym(RTLD_NEXT, "openat");
   }
+  if (!needs_mode(flags)) {
+    return real(dirfd, redirect(path), flags);
+  }
   va_list ap;
   va_start(ap, flags);
   int mode = va_arg(ap, int);
@@ -137,6 +154,9 @@ int openat64(int dirfd, const char *path, int flags, ...) {
   static openat_fn real = 0;
   if (real == 0) {
     real = (openat_fn)dlsym(RTLD_NEXT, "openat64");
+  }
+  if (!needs_mode(flags)) {
+    return real(dirfd, redirect(path), flags);
   }
   va_list ap;
   va_start(ap, flags);
