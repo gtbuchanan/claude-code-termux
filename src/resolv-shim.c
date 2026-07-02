@@ -55,7 +55,8 @@ static const char *redirect(const char *path) {
 }
 
 /* Each interposer resolves the real libc symbol once (RTLD_NEXT skips this
-   preload) and forwards with the path rewritten. */
+   preload) and forwards with the path rewritten; if it can't be resolved it
+   fails closed (NULL / -1) rather than dereferencing a NULL pointer. */
 typedef FILE *(*fopen_fn)(const char *, const char *);
 typedef int (*open_fn)(const char *, int, ...);
 typedef int (*openat_fn)(int, const char *, int, ...);
@@ -72,6 +73,9 @@ FILE *fopen(const char *path, const char *mode) {
   if (real == 0) {
     real = (fopen_fn)dlsym(RTLD_NEXT, "fopen");
   }
+  if (real == 0) {
+    return 0;
+  }
   return real(redirect(path), mode);
 }
 
@@ -79,6 +83,9 @@ int open(const char *path, int flags, ...) {
   static open_fn real = 0;
   if (real == 0) {
     real = (open_fn)dlsym(RTLD_NEXT, "open");
+  }
+  if (real == 0) {
+    return -1;
   }
   if (!needs_mode(flags)) {
     return real(redirect(path), flags);
@@ -94,6 +101,9 @@ int openat(int dirfd, const char *path, int flags, ...) {
   static openat_fn real = 0;
   if (real == 0) {
     real = (openat_fn)dlsym(RTLD_NEXT, "openat");
+  }
+  if (real == 0) {
+    return -1;
   }
   if (!needs_mode(flags)) {
     return real(dirfd, redirect(path), flags);

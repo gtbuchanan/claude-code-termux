@@ -119,9 +119,14 @@ test_resolv_shim_is_elf() {
 # the glibc ld.so load; see src/resolv-shim.c). The startup tests catch this
 # end-to-end too, but this pinpoints a regression to the shim.
 test_resolv_shim_has_no_dt_needed() {
-  assertNull 'resolv-redirect.so has no DT_NEEDED (no libdl.so)' \
-    "$(LD_PRELOAD='' "$patchelf" --print-needed \
-      "$PREFIX/lib/claude-code-termux/resolv-redirect.so" 2>/dev/null)"
+  local needed rc
+  # No 2>/dev/null: a patchelf failure must surface, not be swallowed into an
+  # empty (assertNull-passing) result. Assert it ran before trusting the output.
+  needed=$(LD_PRELOAD='' "$patchelf" --print-needed \
+    "$PREFIX/lib/claude-code-termux/resolv-redirect.so")
+  rc=$?
+  assertEquals 'patchelf --print-needed ran' 0 "$rc"
+  assertNull 'resolv-redirect.so has no DT_NEEDED (no libdl.so)' "$needed"
 }
 test_bootstrap_installed() {
   assertTrue 'bootstrap.sh installed + executable' \
