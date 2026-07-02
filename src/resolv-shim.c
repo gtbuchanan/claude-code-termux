@@ -78,6 +78,12 @@ static const char *redirect(const char *path) {
  * present only for creating opens, so — like glibc's own open() — the va_arg is
  * read ONLY then (needs_mode), never unconditionally (a va_arg the caller didn't
  * pass is undefined behavior), and the mode is likewise forwarded only then.
+ *
+ * The *64 (LFS) variants are ABI-identical to their bases on aarch64 (off_t is
+ * already 64-bit), so they are aliased onto the base interposers — the same way
+ * glibc defines them — rather than duplicated. They must still be exported so a
+ * caller that binds fopen64/open64/openat64 is intercepted (see the aliases
+ * after the definitions).
  */
 typedef FILE *(*fopen_fn)(const char *, const char *);
 typedef int (*open_fn)(const char *, int, ...);
@@ -97,33 +103,10 @@ FILE *fopen(const char *path, const char *mode) {
   return real(redirect(path), mode);
 }
 
-FILE *fopen64(const char *path, const char *mode) {
-  static fopen_fn real = 0;
-  if (real == 0) {
-    real = (fopen_fn)dlsym(RTLD_NEXT, "fopen64");
-  }
-  return real(redirect(path), mode);
-}
-
 int open(const char *path, int flags, ...) {
   static open_fn real = 0;
   if (real == 0) {
     real = (open_fn)dlsym(RTLD_NEXT, "open");
-  }
-  if (!needs_mode(flags)) {
-    return real(redirect(path), flags);
-  }
-  va_list ap;
-  va_start(ap, flags);
-  int mode = va_arg(ap, int);
-  va_end(ap);
-  return real(redirect(path), flags, mode);
-}
-
-int open64(const char *path, int flags, ...) {
-  static open_fn real = 0;
-  if (real == 0) {
-    real = (open_fn)dlsym(RTLD_NEXT, "open64");
   }
   if (!needs_mode(flags)) {
     return real(redirect(path), flags);
@@ -150,17 +133,9 @@ int openat(int dirfd, const char *path, int flags, ...) {
   return real(dirfd, redirect(path), flags, mode);
 }
 
-int openat64(int dirfd, const char *path, int flags, ...) {
-  static openat_fn real = 0;
-  if (real == 0) {
-    real = (openat_fn)dlsym(RTLD_NEXT, "openat64");
-  }
-  if (!needs_mode(flags)) {
-    return real(dirfd, redirect(path), flags);
-  }
-  va_list ap;
-  va_start(ap, flags);
-  int mode = va_arg(ap, int);
-  va_end(ap);
-  return real(dirfd, redirect(path), flags, mode);
-}
+/* LFS aliases (see the interposer comment above): fopen64/open64/openat64 are
+   the base interposers under their 64-bit-off_t names, exported for callers
+   that bind those symbols. */
+FILE *fopen64(const char *, const char *) __attribute__((alias("fopen")));
+int open64(const char *, int, ...) __attribute__((alias("open")));
+int openat64(int, const char *, int, ...) __attribute__((alias("openat")));
