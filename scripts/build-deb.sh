@@ -45,6 +45,10 @@ stage="$build/${PKG}_${VERSION}_${ARCH}"
   echo "error: $build/uname-spoof.so not found — run build-wrapper.sh first." >&2
   exit 1
 }
+[ -f "$build/resolv-redirect.so" ] || {
+  echo "error: $build/resolv-redirect.so not found — run build-wrapper.sh first." >&2
+  exit 1
+}
 
 # Reset only the staging tree, preserving the compiled wrapper at $build/claude.
 rm -rf "$stage"
@@ -63,8 +67,10 @@ install -d "$stage/$PREFIX_REL/libexec/$PKG"
 install -d "$stage/$PREFIX_REL/etc"
 install -d "$stage/$PREFIX_REL/share/doc/$PKG"
 install -m 0755 "$build/claude" "$stage/$PREFIX_REL/bin/claude"
-# The wrapper LD_PRELOADs this; its baked-in UNAME_SHIM path must match.
+# The wrapper LD_PRELOADs these; their baked-in UNAME_SHIM/RESOLV_SHIM paths
+# must match.
 install -m 0644 "$build/uname-spoof.so" "$stage/$PREFIX_REL/lib/$PKG/uname-spoof.so"
+install -m 0644 "$build/resolv-redirect.so" "$stage/$PREFIX_REL/lib/$PKG/resolv-redirect.so"
 install -m 0755 "$root/package/payload/bin/claude-code-termux-update" "$stage/$PREFIX_REL/bin/claude-code-termux-update"
 install -m 0755 "$root/package/payload/libexec/bootstrap.sh" "$stage/$PREFIX_REL/libexec/$PKG/bootstrap.sh"
 install -m 0755 "$root/package/payload/libexec/link-native.sh" "$stage/$PREFIX_REL/libexec/$PKG/link-native.sh"

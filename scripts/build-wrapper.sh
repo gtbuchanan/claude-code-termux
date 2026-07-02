@@ -11,12 +11,16 @@ set -euo pipefail
 PREFIX=/data/data/com.termux/files/usr
 # The wrapper execs the `current` symlink that bootstrap.sh keeps pointing at
 # the patched binary, sets TMPDIR to the Termux prefix tmp dir (Termux has no
-# writable /tmp), and LD_PRELOADs the uname shim (see src/uname-shim.c). All
-# three are baked in at compile time. UNAME_SHIM must match the install path
-# build-deb.sh stages the .so to.
+# writable /tmp), and LD_PRELOADs two shims (see src/uname-shim.c and
+# src/resolv-shim.c). All are baked in at compile time. UNAME_SHIM/RESOLV_SHIM
+# must match the install paths build-deb.sh stages the .so files to.
 BINARY="$PREFIX/opt/claude-code-termux/current"
 TMPDIR_PATH="$PREFIX/tmp"
 UNAME_SHIM="$PREFIX/lib/claude-code-termux/uname-spoof.so"
+RESOLV_SHIM="$PREFIX/lib/claude-code-termux/resolv-redirect.so"
+# Redirect the absolute /etc/resolv.conf (absent on Android) to the prefix copy.
+RESOLV_SRC="/etc/resolv.conf"
+RESOLV_DST="$PREFIX/etc/resolv.conf"
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 out="$root/artifacts/build"
@@ -31,8 +35,16 @@ mkdir -p "$out"
 "$CC" -O2 -Wall -Wextra -Werror -shared -fPIC -nostdlib -ffreestanding \
   -fno-stack-protector -o "$out/uname-spoof.so" "$root/src/uname-shim.c"
 
+# The resolv shim is freestanding too; it references dlsym (resolved from
+# libc.so.6 — deliberately NO -ldl, so no DT_NEEDED; see src/resolv-shim.c) and
+# needs -fno-builtin so clang doesn't rewrite the interposed fopen/open calls.
+"$CC" -O2 -Wall -Wextra -Werror -shared -fPIC -nostdlib -ffreestanding \
+  -fno-stack-protector -fno-builtin \
+  -DRESOLV_SRC="\"$RESOLV_SRC\"" -DRESOLV_DST="\"$RESOLV_DST\"" \
+  -o "$out/resolv-redirect.so" "$root/src/resolv-shim.c"
+
 "$CC" -O2 -Wall -Wextra -Werror -DBINARY="\"$BINARY\"" -DTMPDIR_PATH="\"$TMPDIR_PATH\"" \
-  -DUNAME_SHIM="\"$UNAME_SHIM\"" \
+  -DUNAME_SHIM="\"$UNAME_SHIM\"" -DRESOLV_SHIM="\"$RESOLV_SHIM\"" \
   -o "$out/claude" "$root/src/claude-wrapper.c"
 
 echo "$out/claude"

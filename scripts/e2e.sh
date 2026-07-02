@@ -95,6 +95,7 @@ oneTimeSetUp() {
   probe="$(mktemp -d)/env"
   clang -O2 -DBINARY="\"$PREFIX/bin/env\"" -DTMPDIR_PATH="\"/PROBE_TMPDIR\"" \
     -DUNAME_SHIM="\"$PREFIX/lib/claude-code-termux/uname-spoof.so\"" \
+    -DRESOLV_SHIM="\"$PREFIX/lib/claude-code-termux/resolv-redirect.so\"" \
     -o "$probe" src/claude-wrapper.c >&2 || fatal "probe compile failed"
 }
 
@@ -105,6 +106,27 @@ test_wrapper_installed() {
 test_wrapper_is_elf() {
   assertEquals 'wrapper is an ELF binary' \
     7f454c46 "$(elf_magic "$PREFIX/bin/claude")"
+}
+test_resolv_shim_installed() {
+  assertTrue 'resolv-redirect.so installed' \
+    "[ -f '$PREFIX/lib/claude-code-termux/resolv-redirect.so' ]"
+}
+test_resolv_shim_is_elf() {
+  assertEquals 'resolv-redirect.so is an ELF' \
+    7f454c46 "$(elf_magic "$PREFIX/lib/claude-code-termux/resolv-redirect.so")"
+}
+# The crux of #25: the shim must carry no DT_NEEDED (a libdl.so dep would break
+# the glibc ld.so load; see src/resolv-shim.c). The startup tests catch this
+# end-to-end too, but this pinpoints a regression to the shim.
+test_resolv_shim_has_no_dt_needed() {
+  local needed rc
+  # No 2>/dev/null: a patchelf failure must surface, not be swallowed into an
+  # empty (assertNull-passing) result. Assert it ran before trusting the output.
+  needed=$(LD_PRELOAD='' "$patchelf" --print-needed \
+    "$PREFIX/lib/claude-code-termux/resolv-redirect.so")
+  rc=$?
+  assertEquals 'patchelf --print-needed ran' 0 "$rc"
+  assertNull 'resolv-redirect.so has no DT_NEEDED (no libdl.so)' "$needed"
 }
 test_bootstrap_installed() {
   assertTrue 'bootstrap.sh installed + executable' \
@@ -260,6 +282,43 @@ test_preload_lib_present() {
 test_startup_with_ld_preload_set() {
   assertTrue 'startup with LD_PRELOAD set' \
     "LD_PRELOAD='$preload_lib' '$PREFIX/bin/claude' --version >/dev/null 2>&1"
+}
+
+# resolv redirect: compile a shim variant with temp sentinels (the probe
+# pattern) + a tiny opener, then prove fopen(SRC) is rewritten to DST (SRC
+# absent, so an unredirected open misses). Exercises src/resolv-shim.c directly,
+# independent of a c-ares-affected Claude version. See #25.
+test_resolv_redirect_rewrites_configured_path() {
+  local dir src dst rc
+  dir=$(mktemp -d)
+  src="$dir/sys-resolv.conf" # stands in for the absolute /etc/resolv.conf
+  dst="$dir/prefix-resolv.conf"
+  printf 'nameserver 203.0.113.1\n' >"$dst" # marker; src intentionally absent
+  clang -O2 -Wall -Wextra -Werror -shared -fPIC -nostdlib -ffreestanding \
+    -fno-stack-protector -fno-builtin \
+    -DRESOLV_SRC="\"$src\"" -DRESOLV_DST="\"$dst\"" \
+    -o "$dir/resolv-redirect.so" src/resolv-shim.c 2>"$dir/cc.log"
+  rc=$?
+  assertEquals "resolv shim test build ($(cat "$dir/cc.log"))" 0 "$rc"
+  cat >"$dir/opener.c" <<'EOF'
+#include <stdio.h>
+int main(int argc, char **argv) {
+  FILE *f = fopen(argv[1], "r");
+  if (!f) { puts("MISS"); return 1; }
+  char b[64];
+  if (!fgets(b, sizeof b, f)) b[0] = '\0';
+  fputs(b, stdout);
+  fclose(f);
+  return 0;
+}
+EOF
+  clang -O2 -o "$dir/opener" "$dir/opener.c" 2>/dev/null
+  assertEquals 'opener test build' 0 $?
+  assertEquals 'absent source path misses without the shim' \
+    MISS "$("$dir/opener" "$src" 2>&1)"
+  assertContains 'shim redirects fopen(SRC) to the configured target' \
+    "$(LD_PRELOAD="$dir/resolv-redirect.so" "$dir/opener" "$src" 2>&1)" '203.0.113.1'
+  rm -rf "$dir"
 }
 
 # TMPDIR injection: Termux has no writable /tmp, so the wrapper sets TMPDIR +
