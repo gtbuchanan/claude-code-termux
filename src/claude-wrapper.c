@@ -73,17 +73,12 @@ int claude_wrapper_run(int argc, char **argv,
      overwrite=0 so an explicit user value still wins. */
   (void)setenv("DISABLE_AUTOUPDATER", "1", 0);
   /* Replace (not clear) LD_PRELOAD with our two shims. termux-exec's
-     unversioned libc.so text-script crashes the glibc binary's ld.so, so it
-     must not survive into the exec — and overwriting the variable both evicts
-     it and preloads our interposers:
-       - uname-spoof reports a < 5.11 kernel so Bun avoids the epoll_pwait2
-         startup segfault (bun#32489; see src/uname-shim.c).
-       - resolv-redirect points bundled Bun's c-ares at $PREFIX/etc/resolv.conf
-         so WebFetch / the claude.ai MCP connector / OTEL resolve DNS instead of
-         hanging on the absent /etc/resolv.conf (see src/resolv-shim.c, #25).
-     Both are freestanding glibc ELFs, tolerated by the ugrep/bfs re-exec.
-     overwrite=1: whatever was inherited (termux-exec, or a stale value) is
-     intentionally displaced. */
+     unversioned libc.so text-script would crash the glibc binary's ld.so, so
+     overwriting both evicts it and preloads the interposers: uname-spoof
+     (src/uname-shim.c) and resolv-redirect (src/resolv-shim.c), both
+     freestanding glibc ELFs the ugrep/bfs re-exec tolerates. overwrite=1
+     intentionally displaces whatever was inherited (termux-exec, or a stale
+     value). */
   (void)setenv("LD_PRELOAD", UNAME_SHIM ":" RESOLV_SHIM, 1);
   exec(BINARY, argv);
   fprintf(stderr, "claude wrapper: execv %s failed: %s\n", BINARY,

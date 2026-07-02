@@ -115,12 +115,9 @@ test_resolv_shim_is_elf() {
   assertEquals 'resolv-redirect.so is an ELF' \
     7f454c46 "$(elf_magic "$PREFIX/lib/claude-code-termux/resolv-redirect.so")"
 }
-# The crux of the #25 fix: the shim must load under glibc's ld.so with NO
-# DT_NEEDED. dlsym is left undefined and resolved from the already-loaded
-# libc.so.6; linking -ldl instead records a DT_NEEDED libdl.so that Termux's
-# glibc can't satisfy — the failure mode reported in the issue. (The startup
-# tests below also catch this end-to-end, since the wrapper now preloads it, but
-# this pinpoints a regression to the shim itself.)
+# The crux of #25: the shim must carry no DT_NEEDED (a libdl.so dep would break
+# the glibc ld.so load; see src/resolv-shim.c). The startup tests catch this
+# end-to-end too, but this pinpoints a regression to the shim.
 test_resolv_shim_has_no_dt_needed() {
   assertNull 'resolv-redirect.so has no DT_NEEDED (no libdl.so)' \
     "$(LD_PRELOAD='' "$patchelf" --print-needed \
@@ -282,13 +279,10 @@ test_startup_with_ld_preload_set() {
     "LD_PRELOAD='$preload_lib' '$PREFIX/bin/claude' --version >/dev/null 2>&1"
 }
 
-# resolv redirect: bundled Bun's c-ares reads the absolute /etc/resolv.conf,
-# absent on Android, so DNS for the node:http path (WebFetch preflight, claude.ai
-# MCP connector, OTEL) hangs; the shim rewrites that open to $PREFIX/etc. Compile
-# a shim variant with temp sentinels (the probe pattern) and a tiny opener, then
-# prove fopen(SRC) is redirected to DST — SRC deliberately absent, so an
-# unredirected open misses. Exercises src/resolv-shim.c's rewrite + interposition
-# directly, independent of a c-ares-affected Claude version. See #25.
+# resolv redirect: compile a shim variant with temp sentinels (the probe
+# pattern) + a tiny opener, then prove fopen(SRC) is rewritten to DST (SRC
+# absent, so an unredirected open misses). Exercises src/resolv-shim.c directly,
+# independent of a c-ares-affected Claude version. See #25.
 test_resolv_redirect_rewrites_configured_path() {
   local dir src dst rc
   dir=$(mktemp -d)

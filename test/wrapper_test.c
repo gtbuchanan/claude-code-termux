@@ -138,12 +138,8 @@ TEST preserves_existing_disable_autoupdater(void) {
 }
 
 /*
- * termux-exec is preloaded into every Termux shell; its text-script libc.so
- * crashes the glibc binary's ld.so. The wrapper overwrites LD_PRELOAD with both
- * shims (colon-joined, uname first) — evicting termux-exec AND preloading the
- * interposers that keep Bun off the crashing epoll_pwait2 path (bun#32489) and
- * point c-ares at a reachable resolv.conf (#25). An inherited value is
- * displaced, not preserved.
+ * The wrapper overwrites LD_PRELOAD with both shims (colon-joined, uname first),
+ * displacing any inherited value (e.g. termux-exec) rather than preserving it.
  */
 TEST sets_ld_preload_to_both_shims(void) {
   reset_fixture();

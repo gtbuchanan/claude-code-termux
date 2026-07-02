@@ -18,8 +18,7 @@ BINARY="$PREFIX/opt/claude-code-termux/current"
 TMPDIR_PATH="$PREFIX/tmp"
 UNAME_SHIM="$PREFIX/lib/claude-code-termux/uname-spoof.so"
 RESOLV_SHIM="$PREFIX/lib/claude-code-termux/resolv-redirect.so"
-# c-ares reads the absolute /etc/resolv.conf, absent on Android; the shim
-# redirects it to the Termux prefix copy (present, reachable). See #25.
+# Redirect the absolute /etc/resolv.conf (absent on Android) to the prefix copy.
 RESOLV_SRC="/etc/resolv.conf"
 RESOLV_DST="$PREFIX/etc/resolv.conf"
 
@@ -36,12 +35,9 @@ mkdir -p "$out"
 "$CC" -O2 -Wall -Wextra -Werror -shared -fPIC -nostdlib -ffreestanding \
   -fno-stack-protector -o "$out/uname-spoof.so" "$root/src/uname-shim.c"
 
-# The resolv shim is freestanding too, but must call the real fopen/open (the
-# fopen family returns an opaque glibc FILE*), so it references dlsym — left as
-# an undefined symbol that glibc's ld.so resolves from libc.so.6 (merged since
-# 2.34). Deliberately NO -ldl: that would record a DT_NEEDED libdl.so Termux's
-# glibc can't satisfy (see src/resolv-shim.c). -fno-builtin so clang doesn't
-# rewrite the interposed calls.
+# The resolv shim is freestanding too; it references dlsym (resolved from
+# libc.so.6 — deliberately NO -ldl, so no DT_NEEDED; see src/resolv-shim.c) and
+# needs -fno-builtin so clang doesn't rewrite the interposed fopen/open calls.
 "$CC" -O2 -Wall -Wextra -Werror -shared -fPIC -nostdlib -ffreestanding \
   -fno-stack-protector -fno-builtin \
   -DRESOLV_SRC="\"$RESOLV_SRC\"" -DRESOLV_DST="\"$RESOLV_DST\"" \
