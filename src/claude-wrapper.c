@@ -12,9 +12,9 @@
  * the glibc Claude binary (see the LD_PRELOAD comment in claude_wrapper_run).
  *
  * BINARY (the absolute path to the patched Claude Code binary), TMPDIR_PATH (the
- * Termux prefix tmp dir), and UNAME_SHIM (the absolute path to the uname-spoof
- * .so) are baked in at compile time via -DBINARY="…", -DTMPDIR_PATH="…", and
- * -DUNAME_SHIM="…".
+ * Termux prefix tmp dir), UNAME_SHIM, and RESOLV_SHIM (the absolute paths to the
+ * two LD_PRELOAD shims) are baked in at compile time via -DBINARY="…",
+ * -DTMPDIR_PATH="…", -DUNAME_SHIM="…", and -DRESOLV_SHIM="…".
  */
 #include <errno.h>
 #include <stdio.h>
@@ -33,6 +33,11 @@
 #ifndef UNAME_SHIM
 #error                                                                         \
     "UNAME_SHIM must be defined at compile time (-DUNAME_SHIM=\"/…/uname-spoof.so\")"
+#endif
+
+#ifndef RESOLV_SHIM
+#error                                                                         \
+    "RESOLV_SHIM must be defined at compile time (-DRESOLV_SHIM=\"/…/resolv-redirect.so\")"
 #endif
 
 /*
@@ -67,14 +72,19 @@ int claude_wrapper_run(int argc, char **argv,
      second, settings-independent layer that travels with every launch.
      overwrite=0 so an explicit user value still wins. */
   (void)setenv("DISABLE_AUTOUPDATER", "1", 0);
-  /* Replace (not clear) LD_PRELOAD with the uname shim. termux-exec's
+  /* Replace (not clear) LD_PRELOAD with our two shims. termux-exec's
      unversioned libc.so text-script crashes the glibc binary's ld.so, so it
      must not survive into the exec — and overwriting the variable both evicts
-     it and preloads our interposer, which reports a < 5.11 kernel so Bun avoids
-     the epoll_pwait2 startup segfault (bun#32489; see src/uname-shim.c).
+     it and preloads our interposers:
+       - uname-spoof reports a < 5.11 kernel so Bun avoids the epoll_pwait2
+         startup segfault (bun#32489; see src/uname-shim.c).
+       - resolv-redirect points bundled Bun's c-ares at $PREFIX/etc/resolv.conf
+         so WebFetch / the claude.ai MCP connector / OTEL resolve DNS instead of
+         hanging on the absent /etc/resolv.conf (see src/resolv-shim.c, #25).
+     Both are freestanding glibc ELFs, tolerated by the ugrep/bfs re-exec.
      overwrite=1: whatever was inherited (termux-exec, or a stale value) is
      intentionally displaced. */
-  (void)setenv("LD_PRELOAD", UNAME_SHIM, 1);
+  (void)setenv("LD_PRELOAD", UNAME_SHIM ":" RESOLV_SHIM, 1);
   exec(BINARY, argv);
   fprintf(stderr, "claude wrapper: execv %s failed: %s\n", BINARY,
           strerror(errno));
