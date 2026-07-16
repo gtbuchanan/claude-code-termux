@@ -108,7 +108,7 @@ version = "43.233.1"
 backend = "npm:renovate"
 
 [[tools."pipx:clang-format"]]
-version = "22.1.5"
+version = "22.1.8"
 backend = "pipx:clang-format"
 
 [[tools.pkl]]
