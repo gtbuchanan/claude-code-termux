@@ -144,42 +144,52 @@ checksum = "sha256:a8834481667325b44c539dbb758d7365a16389070f343c04b639bbe525ede
 url = "https://github.com/apple/pkl/releases/download/0.31.1/pkl-windows-amd64.exe"
 
 [[tools.ruff]]
-version = "0.15.18"
+version = "0.15.21"
 backend = "aqua:astral-sh/ruff"
 
+[tools.ruff."platforms.android-arm64"]
+provenance = "github-attestations"
+
 [tools.ruff."platforms.linux-arm64"]
-checksum = "sha256:941eb7a7b8bc11f195a08393bb45def1656003031cff89af3805ca89cfd066b4"
-url = "https://github.com/astral-sh/ruff/releases/download/0.15.18/ruff-aarch64-unknown-linux-musl.tar.gz"
+checksum = "sha256:2ec7c0077431f96f74c3c72aea6505e902bc2ff47127653c8de1389ee30a3cb3"
+url = "https://github.com/astral-sh/ruff/releases/download/0.15.21/ruff-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/ruff/releases/assets/471700003"
 provenance = "github-attestations"
 
 [tools.ruff."platforms.linux-arm64-musl"]
-checksum = "sha256:941eb7a7b8bc11f195a08393bb45def1656003031cff89af3805ca89cfd066b4"
-url = "https://github.com/astral-sh/ruff/releases/download/0.15.18/ruff-aarch64-unknown-linux-musl.tar.gz"
+checksum = "sha256:2ec7c0077431f96f74c3c72aea6505e902bc2ff47127653c8de1389ee30a3cb3"
+url = "https://github.com/astral-sh/ruff/releases/download/0.15.21/ruff-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/ruff/releases/assets/471700003"
 provenance = "github-attestations"
 
 [tools.ruff."platforms.linux-x64"]
-checksum = "sha256:9ca54aec52cfdbe1e708cc975e41e3e736a2c1ebe76668575efe09e0701465c8"
-url = "https://github.com/astral-sh/ruff/releases/download/0.15.18/ruff-x86_64-unknown-linux-musl.tar.gz"
+checksum = "sha256:7e157ff9a2e13676118c587e6db0ec02d040e415b21014346d230e64789c0e78"
+url = "https://github.com/astral-sh/ruff/releases/download/0.15.21/ruff-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/ruff/releases/assets/471700081"
 provenance = "github-attestations"
 
 [tools.ruff."platforms.linux-x64-musl"]
-checksum = "sha256:9ca54aec52cfdbe1e708cc975e41e3e736a2c1ebe76668575efe09e0701465c8"
-url = "https://github.com/astral-sh/ruff/releases/download/0.15.18/ruff-x86_64-unknown-linux-musl.tar.gz"
+checksum = "sha256:7e157ff9a2e13676118c587e6db0ec02d040e415b21014346d230e64789c0e78"
+url = "https://github.com/astral-sh/ruff/releases/download/0.15.21/ruff-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/ruff/releases/assets/471700081"
 provenance = "github-attestations"
 
 [tools.ruff."platforms.macos-arm64"]
-checksum = "sha256:f0cc66c2df37f2a11c99a85b59b8fde21b37f61df062404a0afaed387b56dad0"
-url = "https://github.com/astral-sh/ruff/releases/download/0.15.18/ruff-aarch64-apple-darwin.tar.gz"
+checksum = "sha256:0452f9d5da6e8051d332cf21ae82a608d8e2cfeec5a71a46ffa9e50adbb2381d"
+url = "https://github.com/astral-sh/ruff/releases/download/0.15.21/ruff-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/ruff/releases/assets/471699864"
 provenance = "github-attestations"
 
 [tools.ruff."platforms.macos-x64"]
-checksum = "sha256:229d2c192718fde76794185ab9339515b75a55cc1337e4ca9d60309e2c506900"
-url = "https://github.com/astral-sh/ruff/releases/download/0.15.18/ruff-x86_64-apple-darwin.tar.gz"
+checksum = "sha256:7e6ff3bd585b5b7c47634c957ac84fb5806d3c7ab4ef0e5ec1c53ce272f489da"
+url = "https://github.com/astral-sh/ruff/releases/download/0.15.21/ruff-x86_64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/ruff/releases/assets/471700061"
 provenance = "github-attestations"
 
 [tools.ruff."platforms.windows-x64"]
-checksum = "sha256:2c38db5fef5984c93db7bdc395c20c5c3470fafdd8deb72150db4d2da7870d07"
-url = "https://github.com/astral-sh/ruff/releases/download/0.15.18/ruff-x86_64-pc-windows-msvc.zip"
+checksum = "sha256:035c59abfd7bd1102e0b656f5771e6ae7a712a45ef54b5ab575541c7ff7d1eb0"
+url = "https://github.com/astral-sh/ruff/releases/download/0.15.21/ruff-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/astral-sh/ruff/releases/assets/471700068"
 provenance = "github-attestations"
 
 [[tools.shellcheck]]
