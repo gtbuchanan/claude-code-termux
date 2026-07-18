@@ -43,7 +43,7 @@ includes = ["mise-tasks", "mise.tasks.toml"]
 # builtins shell out to.
 [tools]
 actionlint = "1.7.12"
-hk = "1.48.0"
+hk = "1.51.0"
 node = "24.18.0"
 "npm:@gtbuchanan/cli" = "0.2.0"
 "npm:renovate" = "43.233.1"
