@@ -4,6 +4,10 @@
 min_version = { soft = "2026.6.2" }
 
 [env]
+# aube, which mise installs npm-backed tools with, refuses any package under
+# 1000 weekly downloads. @gtbuchanan/* are first-party, so exempt the scope,
+# mirroring the minimum_release_age_excludes carve-out below.
+AUBE_ALLOWED_UNPOPULAR_PACKAGES = "@gtbuchanan/*"
 # hk wraps each hook step in `mise x`, so its mise-managed linter binaries
 # (actionlint, shellcheck, shfmt, ruff, clang-format, renovate-config-validator)
 # resolve without shell activation.
