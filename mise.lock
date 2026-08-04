@@ -115,7 +115,7 @@ version = "0.3.0"
 backend = "npm:@gtbuchanan/cli"
 
 [[tools."npm:renovate"]]
-version = "43.233.1"
+version = "43.288.0"
 backend = "npm:renovate"
 
 [[tools."pipx:clang-format"]]
