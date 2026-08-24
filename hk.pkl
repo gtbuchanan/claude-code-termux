@@ -1,7 +1,7 @@
-amends "package://github.com/jdx/hk/releases/download/v1.54.0/hk@1.54.0#/Config.pkl"
-import "package://github.com/jdx/hk/releases/download/v1.54.0/hk@1.54.0#/Builtins.pkl"
+amends "package://github.com/jdx/hk/releases/download/v1.56.0/hk@1.56.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v1.56.0/hk@1.56.0#/Builtins.pkl"
 
-import "package://github.com/gtbuchanan/tooling/releases/download/hk-config@0.2.2/hk-config@0.2.2#/Defaults.pkl"
+import "package://github.com/gtbuchanan/tooling/releases/download/hk-config@0.2.4/hk-config@0.2.4#/Defaults.pkl"
 
 local allSteps = new Mapping<String, Step> {
     ...Defaults.recommended
