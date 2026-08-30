@@ -8,13 +8,12 @@
  * wrapper would arrive as argv[0]="…/bash". execv() preserves argv verbatim.
  *
  * The wrapper is itself a bionic binary, so Termux's libtermux-exec loads into
- * it cleanly; it then overwrites LD_PRELOAD with the uname shim before exec'ing
+ * it cleanly; it then overwrites LD_PRELOAD with its own shims before exec'ing
  * the glibc Claude binary (see the LD_PRELOAD comment in claude_wrapper_run).
  *
- * BINARY (the absolute path to the patched Claude Code binary), TMPDIR_PATH (the
- * Termux prefix tmp dir), UNAME_SHIM, and RESOLV_SHIM (the absolute paths to the
- * two LD_PRELOAD shims) are baked in at compile time via -DBINARY="…",
- * -DTMPDIR_PATH="…", -DUNAME_SHIM="…", and -DRESOLV_SHIM="…".
+ * The patched Claude Code binary, the Termux prefix tmp dir, and the LD_PRELOAD
+ * shim paths are all baked in at compile time; the #error guards below name the
+ * macros that carry them.
  */
 #include <errno.h>
 #include <stdio.h>
@@ -38,6 +37,11 @@
 #ifndef RESOLV_SHIM
 #error                                                                         \
     "RESOLV_SHIM must be defined at compile time (-DRESOLV_SHIM=\"/…/resolv-redirect.so\")"
+#endif
+
+#ifndef EXECPATH_SHIM
+#error                                                                         \
+    "EXECPATH_SHIM must be defined at compile time (-DEXECPATH_SHIM=\"/…/execpath-redirect.so\")"
 #endif
 
 /*
@@ -72,14 +76,13 @@ int claude_wrapper_run(int argc, char **argv,
      second, settings-independent layer that travels with every launch.
      overwrite=0 so an explicit user value still wins. */
   (void)setenv("DISABLE_AUTOUPDATER", "1", 0);
-  /* Replace (not clear) LD_PRELOAD with our two shims. termux-exec's
+  /* Replace (not clear) LD_PRELOAD with our own shims. termux-exec's
      unversioned libc.so text-script would crash the glibc binary's ld.so, so
-     overwriting both evicts it and preloads the interposers: uname-spoof
-     (src/uname-shim.c) and resolv-redirect (src/resolv-shim.c), both
-     freestanding glibc ELFs the ugrep/bfs re-exec tolerates. overwrite=1
+     overwriting it evicts that and preloads the shim interposers, freestanding
+     glibc ELFs the ugrep/bfs re-exec tolerates. overwrite=1
      intentionally displaces whatever was inherited (termux-exec, or a stale
      value). */
-  (void)setenv("LD_PRELOAD", UNAME_SHIM ":" RESOLV_SHIM, 1);
+  (void)setenv("LD_PRELOAD", UNAME_SHIM ":" RESOLV_SHIM ":" EXECPATH_SHIM, 1);
   exec(BINARY, argv);
   fprintf(stderr, "claude wrapper: execv %s failed: %s\n", BINARY,
           strerror(errno));

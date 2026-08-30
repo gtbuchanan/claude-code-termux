@@ -22,15 +22,14 @@ publish the binary; the `.deb` contains no Anthropic bytes.
 1. `install.sh` enables the `glibc-repo` apt source and `apt install`s the
    `.deb`; `apt` pulls the runtime deps.
 1. `postinst` downloads the `linux-arm64` binary from Anthropic, SHA-256-verifies
-   it, runs `patchelf --set-interpreter` to point it at Termux's glibc loader,
-   and runs `patch-execpath.py` to blank the subprocess `CLAUDE_CODE_EXECPATH`
-   assignment.
+   it, and runs `patchelf --set-interpreter` to point it at Termux's glibc
+   loader. No byte patching of the binary's contents is involved.
 1. The compiled C launcher (`bin/claude`) execs the patched binary —
    `execv` **preserves `argv[0]`** (so Claude's embedded `grep`/`find`/`rg`
-   dispatch works), it **overwrites `LD_PRELOAD` with two freestanding shims**
-   (`lib/claude-code-termux/uname-spoof.so:…/resolv-redirect.so`): this evicts
-   termux-exec's text-script `libc.so` (which the glibc binary's `ld.so` can't
-   load) and preloads both interposers. The **uname** shim reports a `< 5.11`
+   dispatch works), it **overwrites `LD_PRELOAD` with its own freestanding shims**
+   (colon-joined, out of `lib/claude-code-termux/`): this evicts termux-exec's
+   text-script `libc.so` (which the glibc binary's `ld.so` can't load) and
+   preloads the interposers. The **uname** shim reports a `< 5.11`
    kernel so Bun skips the `epoll_pwait2` path that segfaults at startup on newer
    kernels (bun#32489 — see `src/uname-shim.c` and `claude-code#50270`). The
    **resolv** shim redirects opens of the absolute `/etc/resolv.conf` (which
@@ -38,7 +37,12 @@ publish the binary; the `.deb` contains no Anthropic bytes.
    `$PREFIX/etc/resolv.conf`, so bundled Bun's c-ares (its `node:http`/axios
    path — WebFetch's domain preflight, the claude.ai MCP connector, OTEL export)
    finds nameservers instead of hanging on a timeout (see `src/resolv-shim.c` and
-   issue #25). It also
+   issue #25). The **execpath** shim rewrites `CLAUDE_CODE_EXECPATH` in the
+   environment of every process Claude spawns so it names the launcher rather
+   than the bare binary — that variable is what the shell snapshot's embedded
+   `ugrep`/`bfs` wrappers re-exec, and pointing it at the bare binary sends the
+   re-exec into `ld.so` carrying the bionic `LD_PRELOAD` (see
+   `src/execpath-shim.c` and issue #61). It also
    **sets `TMPDIR`/`CLAUDE_CODE_TMPDIR`** to the Termux prefix when unset (Termux
    has no writable `/tmp`; see `src/claude-wrapper.c` for the
    env-vs-hardcoded-`/tmp` analysis and the MCP-browser-bridge limitation,
@@ -63,23 +67,23 @@ publish the binary; the `.deb` contains no Anthropic bytes.
 | Path | Role |
 |---|---|
 | `install.sh` | Single install path. Downloads the latest release `.deb` (or installs a local one via `CLAUDE_CODE_DEB=<path>`), enables `glibc-repo`, `apt install`s it. The install flow is in `main` behind a `CLAUDE_CODE_INSTALL_LIB` guard so the unit test can source its pure helpers without running it (and `curl \| bash` still runs `main`). |
-| `package/control` | Metadata. `Depends: bash, curl, jq, python3, glibc-runner, patchelf-glibc`. |
+| `package/control` | Metadata. `Depends: bash, curl, jq, glibc-runner, patchelf-glibc`. |
 | `package/postinst` | Settings merge (skip via `CLAUDE_CODE_SKIP_SETTINGS`) + native-path symlink (via `link-native.sh`) + fetch the binary. |
 | `package/postrm` | Removes the fetched binary and the native-path symlink on uninstall. |
 | `package/payload/bin/claude-code-termux-update` | Reconcile the native-path symlink (`link-native.sh`), then re-patch only if the version changed (`bootstrap.sh update`; schedulable). `--force` to re-apply. |
-| `package/payload/libexec/bootstrap.sh` | Resolve / download (`curl --retry`, optional `CLAUDE_CODE_CACHE_DIR`) / verify / `patchelf` / execPath-patch engine. |
+| `package/payload/libexec/bootstrap.sh` | Resolve / download (`curl --retry`, optional `CLAUDE_CODE_CACHE_DIR`) / verify / `patchelf` engine. |
 | `package/payload/libexec/link-native.sh` | Idempotent native-path symlink (`~/.local/bin/claude` → launcher) reconcile, shared by `postinst` and the update command. |
-| `package/payload/libexec/patch-execpath.py` | The `CLAUDE_CODE_EXECPATH` patch. |
 | `package/payload/etc/claude-code-termux.conf` | `CLAUDE_CODE_VERSION` pin + `CLAUDE_CODE_CACHE_DIR` (both empty by default). |
-| `src/claude-wrapper.c` | The C launcher (`-DBINARY=`/`-DTMPDIR_PATH=`/`-DUNAME_SHIM=`/`-DRESOLV_SHIM=` baked in at compile). `claude_wrapper_run()` takes its exec function as a parameter — a seam the unit tests fake. |
+| `src/claude-wrapper.c` | The C launcher (binary, tmpdir, and shim paths baked in at compile). `claude_wrapper_run()` takes its exec function as a parameter — a seam the unit tests fake. |
 | `src/uname-shim.c` | Freestanding `LD_PRELOAD` `uname()` interposer reporting kernel `5.10.0`, so Bun avoids the `epoll_pwait2` startup segfault (bun#32489). Built by `build-wrapper.sh`, shipped to `lib/claude-code-termux/uname-spoof.so`, preloaded by the launcher. |
 | `src/resolv-shim.c` | Freestanding `LD_PRELOAD` `fopen`/`open`-family interposer that redirects the absolute `/etc/resolv.conf` (absent on Android) to `$PREFIX/etc/resolv.conf`, so bundled Bun's c-ares resolves DNS on its `node:http` path (WebFetch/claude.ai-MCP/OTEL) instead of hanging (issue #25). References `dlsym` as an undefined symbol resolved from `libc.so.6` — **no `-ldl`**, so zero `DT_NEEDED` (a `libdl.so` dep would break the glibc `ld.so` load). Built by `build-wrapper.sh`, shipped to `lib/claude-code-termux/resolv-redirect.so`, preloaded by the launcher alongside the uname shim. |
+| `src/execpath-shim.c` | Freestanding `LD_PRELOAD` `execve`/`posix_spawn`-family interposer that rewrites `CLAUDE_CODE_EXECPATH` in every spawned child's `envp` to name the launcher, so the shell snapshot's embedded `ugrep`/`bfs` re-execs go through it instead of straight at the bare binary (issue #61). Replaces an existing entry only — never appends one, so unrelated children keep their environment. Same `dlsym`/no-`-ldl`/zero-`DT_NEEDED` constraints as the resolv shim. Built by `build-wrapper.sh`, shipped to `lib/claude-code-termux/execpath-redirect.so`, preloaded by the launcher. |
 | `test/wrapper_test.c` | Unit tests for the launcher (greatest; recording exec stub). |
 | `test/install_test.sh` | Hermetic unit tests for `install.sh`'s pure helpers (shUnit2; no network/apt). |
 | `test/compat.h` | Test-only `setenv`/`unsetenv` shims for Windows libc; force-included into the test build, never shipped. |
 | `vendor/greatest.h` | Vendored single-header test framework (greatest 1.5.0, ISC; from silentbicycle/greatest). |
 | `vendor/shunit2` | Vendored single-file shell test framework (shUnit2 2.1.9pre, Apache-2.0; pinned to kward/shunit2 master @ `f39734a` — no tagged release since 2.1.8, and master carries the `egrep`→`grep -E` fix we'd otherwise patch). Drives `scripts/e2e.sh` and `test/install_test.sh`. Carries one local patch (grep `PATCHED FOR TERMUX`; re-apply on bump): `#! /bin/sh` stub scripts → resolve `sh` via PATH (submitted upstream as kward/shunit2#189). |
-| `scripts/build-wrapper.sh` | Compile the wrapper + uname/resolv shims with Termux's clang. |
+| `scripts/build-wrapper.sh` | Compile the wrapper + its shims with Termux's clang. |
 | `scripts/build-deb.sh` | Stage + `dpkg-deb --build` → `artifacts/packages/`. |
 | `scripts/compile.sh` | Compile the wrapper + assemble the `.deb`, in a Termux env. |
 | `scripts/e2e.sh` | Install the prebuilt `.deb` + assert the fixes, in a Termux env. |
@@ -152,10 +156,12 @@ tasks:
 `mise run compile` produces the `.deb`, then `mise run test:e2e` installs it via
 `install.sh` and asserts the real fixes: `argv[0]=rg`/`bfs` dispatch to the
 embedded ripgrep/bfs, startup with `LD_PRELOAD` set (the launcher overwrites it
-with the two shims), a runtime-init boot guard (`claude mcp list` spins up
+with its own), a runtime-init boot guard (`claude mcp list` spins up
 Bun's event loop — catching startup crashes the `--version` fast path can't,
 e.g. the Bun 1.4.0 `epoll_pwait2` segfault the uname shim prevents), the resolv
 redirect (the shim rewrites a configured path and carries no `DT_NEEDED`, #25),
+the execpath redirect (the shim rewrites `CLAUDE_CODE_EXECPATH` in a spawned
+child's environment and leaves an environment without it alone, #61),
 `TMPDIR` injection, the `settings.json` merge, the conditional/cached update
 paths, and the interpreter-repair `ensure`. The suite is built on the vendored shUnit2 (a
 single sourced file; the install is its `oneTimeSetUp`, behaviors are
@@ -169,8 +175,8 @@ produces is visible to a later `test:e2e`.
 For local speed, `docker-run.sh` also mounts gitignored host caches under
 `artifacts/cache/` — the Termux **apt archive** cache (so build/runtime `.deb`s
 aren't re-downloaded; apt still fully installs + resolves) and a **`claude`**
-binary cache via `CLAUDE_CODE_CACHE_DIR` (raw pre-patch bytes; `patchelf` + the
-execPath patch still run). In CI the cache dirs start empty per checkout, so the
+binary cache via `CLAUDE_CODE_CACHE_DIR` (raw pre-patch bytes; `patchelf` still
+runs). In CI the cache dirs start empty per checkout, so the
 cache-hit path is still exercised within a run without persisting across runs.
 
 **termux-docker gotcha:** its entrypoint drops privileges and **sanitizes the
@@ -199,8 +205,9 @@ vars **inline** in the `bash -c` string instead.
   and on a **new** version — gated by an `actions/cache` key per version so it
   runs once per release — calls `ci.yml` pinned to that version. The cache is
   saved only on success (a break is retried daily); a failure opens a
-  deduplicated issue. This catches `patch-execpath.py` anchor breaks (bun
-  minifier identifier rotation) within a day of release.
+  deduplicated issue. This catches a new Claude Code release breaking one of the
+  fixes — a Bun/runtime change the shims no longer cover, or an ELF layout
+  `patchelf` chokes on — within a day of release.
 - **`cd.yml`** (`push: main`): reuses `ci.yml`, then a `release` job **gated by
   the `release` GitHub Environment** (configure required reviewers in repo
   settings for the gate to pause) downloads the built artifact and publishes a

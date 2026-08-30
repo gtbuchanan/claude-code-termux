@@ -2,7 +2,7 @@
 #
 # Installer for claude-code-termux. Enables the glibc package repo, then installs
 # the .deb with apt, which resolves the package's dependencies (glibc-runner,
-# patchelf-glibc, jq, python3) automatically. The package's postinstall then
+# patchelf-glibc, jq) automatically. The package's postinstall then
 # downloads + patches the Claude Code binary.
 #
 #   curl -fsSL https://raw.githubusercontent.com/gtbuchanan/claude-code-termux/main/install.sh | bash
@@ -107,8 +107,8 @@ main() {
   apt-get install -y glibc-repo
   apt-get update -y
 
-  # apt reads the package's Depends and pulls glibc-runner, patchelf-glibc, jq,
-  # and python3 automatically (dpkg -i would not).
+  # apt reads the package's Depends and pulls glibc-runner, patchelf-glibc, and
+  # jq automatically (dpkg -i would not).
   log "Installing (apt resolves dependencies)…"
   apt-get install -y "$deb"
 

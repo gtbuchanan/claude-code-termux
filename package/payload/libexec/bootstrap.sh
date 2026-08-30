@@ -4,11 +4,11 @@
 # linux-arm64 binary so it runs natively on Termux/Android (aarch64).
 #
 # Installed by the claude-code-termux package. Invoked by postinst (on install)
-# and by `claude-code-termux-update`. Two patches are applied to a freshly
-# downloaded binary:
-#   1. patchelf --set-interpreter → Termux's glibc loader (kernel-direct exec).
-#   2. patch-execpath.py → blank the subprocess CLAUDE_CODE_EXECPATH assignment
-#      so Claude's embedded-tool re-execs route through the launcher wrapper.
+# and by `claude-code-termux-update`. One patch is applied to a freshly
+# downloaded binary: patchelf --set-interpreter → Termux's glibc loader
+# (kernel-direct exec). Routing Claude's embedded-tool re-execs back through the
+# launcher is handled at run time by the execpath LD_PRELOAD shim
+# (src/execpath-shim.c), not by patching the binary.
 #
 # The binary is downloaded directly from Anthropic at run time and patched
 # locally; nothing is rehosted here. See the README for the full rationale.
@@ -29,7 +29,6 @@ GLIBC_PREFIX="${GLIBC_PREFIX:-$PREFIX/glibc}"
 PATCHELF="$GLIBC_PREFIX/bin/patchelf"
 GLIBC_LD="$GLIBC_PREFIX/lib/ld-linux-aarch64.so.1"
 
-LIBEXEC="$PREFIX/libexec/claude-code-termux"
 OPT_DIR="$PREFIX/opt/claude-code-termux"
 CURRENT="$OPT_DIR/current"
 CONF="$PREFIX/etc/claude-code-termux.conf"
@@ -98,7 +97,6 @@ fetch() {
 
   command -v curl >/dev/null 2>&1 || die "missing 'curl' — pkg install curl"
   command -v jq >/dev/null 2>&1 || die "missing 'jq' — pkg install jq"
-  command -v python3 >/dev/null 2>&1 || die "missing 'python3' — pkg install python"
   [ -x "$PATCHELF" ] || die "patchelf not found at $PATCHELF — pkg install patchelf-glibc"
   [ -e "$GLIBC_LD" ] || die "glibc loader not found at $GLIBC_LD — pkg install glibc-runner"
 
@@ -108,9 +106,8 @@ fetch() {
 
   mkdir -p "$OPT_DIR"
 
-  # Patches are applied to a freshly fetched binary only: the execPath patch
-  # is not idempotent (it consumes its own anchor), so an already-installed
-  # version is left as-is.
+  # An already-installed version is left as-is; --force (or the `ensure` repair
+  # below) is the way to re-apply the patch to a version already on disk.
   if [ ! -x "$binary" ]; then
     local checksum tmp cache=""
     checksum=$("${CURL[@]}" "$DL_BASE/$version/manifest.json" |
@@ -119,8 +116,8 @@ fetch() {
     # Optional raw-binary cache (CLAUDE_CODE_CACHE_DIR): skip the multi-MB
     # download on reinstalls / version rollbacks — handy on slow or metered
     # mobile links. The cache holds the verified RAW bytes (pre-patch), so the
-    # checksum, patchelf, and execPath patch below still run every time; only
-    # the network transfer is skipped.
+    # checksum verification and patchelf below still run every time; only the
+    # network transfer is skipped.
     [ -n "${CLAUDE_CODE_CACHE_DIR:-}" ] && cache="$CLAUDE_CODE_CACHE_DIR/claude-$version-$PLATFORM"
 
     tmp=$(mktemp)
@@ -152,10 +149,6 @@ fetch() {
     # so termux-exec's unversioned libc.so text-script does not crash patchelf
     # (itself a glibc binary).
     LD_PRELOAD='' "$PATCHELF" --set-interpreter "$GLIBC_LD" "$tmp"
-
-    # Blank the subprocess CLAUDE_CODE_EXECPATH assignment (python3 is bionic,
-    # so no LD_PRELOAD handling is needed here).
-    python3 "$LIBEXEC/patch-execpath.py" "$tmp"
 
     chmod +x "$tmp"
     mv "$tmp" "$binary"
