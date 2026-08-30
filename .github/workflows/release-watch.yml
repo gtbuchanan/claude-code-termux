@@ -1,9 +1,9 @@
 name: Release watch
 
 # Polls Anthropic's Claude Code release channel and runs the full build/test
-# against any newly-released version. The patch pipeline — notably the
-# patch-execpath.py byte-anchor, which bun's minifier can rotate out from under
-# us between releases — is the fragile surface; this surfaces a break within a
+# against any newly-released version. The fixes all ride on how the shipped
+# binary behaves — the Bun runtime the shims interpose on, and the ELF layout
+# patchelf rewrites — so a release can break them; this surfaces that within a
 # day of publication instead of when a user next installs. An actions/cache key
 # per version gates the e2e so it runs once per release, not every day.
 on:
@@ -109,11 +109,10 @@ jobs:
           gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body \
           "The scheduled build/test against Claude Code \`$VERSION\` failed.
 
-          The most likely cause is \`package/payload/libexec/patch-execpath.py\`:
-          bun's minifier rotates identifiers between releases, so the byte
-          anchor (the trailing \`).TMUX=\`) may no longer match exactly once.
-          The patch fails loudly (match count != 1) and the failure output now
-          includes a byte window around each \`process.execPath\` occurrence to
-          show the new surrounding shape.
+          Check the failing job for which fix regressed. Likely causes: a Bun
+          upgrade that changes how the binary spawns subprocesses or reads
+          \`/etc/resolv.conf\` (so one of the \`src/*-shim.c\` interposers no
+          longer covers it), a change to the shell snapshot's embedded-tool
+          wrappers, or an ELF layout \`patchelf --set-interpreter\` chokes on.
 
           Failed run: $RUN_URL"

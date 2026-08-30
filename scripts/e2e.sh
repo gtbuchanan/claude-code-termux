@@ -151,13 +151,8 @@ test_bootstrap_installed() {
   assertTrue 'bootstrap.sh installed + executable' \
     "[ -x '$PREFIX/libexec/claude-code-termux/bootstrap.sh' ]"
 }
-test_patch_execpath_installed() {
-  assertTrue 'patch-execpath.py installed' \
-    "[ -f '$PREFIX/libexec/claude-code-termux/patch-execpath.py' ]"
-}
 test_runtime_deps_installed() {
   assertTrue 'jq on PATH' 'command -v jq >/dev/null'
-  assertTrue 'python3 on PATH' 'command -v python3 >/dev/null'
   assertTrue 'patchelf installed' "[ -x '$patchelf' ]"
 }
 test_patched_binary_present() {

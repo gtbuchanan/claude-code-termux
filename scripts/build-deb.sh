@@ -78,7 +78,6 @@ install -m 0644 "$build/execpath-redirect.so" "$stage/$PREFIX_REL/lib/$PKG/execp
 install -m 0755 "$root/package/payload/bin/claude-code-termux-update" "$stage/$PREFIX_REL/bin/claude-code-termux-update"
 install -m 0755 "$root/package/payload/libexec/bootstrap.sh" "$stage/$PREFIX_REL/libexec/$PKG/bootstrap.sh"
 install -m 0755 "$root/package/payload/libexec/link-native.sh" "$stage/$PREFIX_REL/libexec/$PKG/link-native.sh"
-install -m 0755 "$root/package/payload/libexec/patch-execpath.py" "$stage/$PREFIX_REL/libexec/$PKG/patch-execpath.py"
 install -m 0644 "$root/package/payload/etc/claude-code-termux.conf" "$stage/$PREFIX_REL/etc/$PKG.conf"
 install -m 0644 "$root/README.md" "$stage/$PREFIX_REL/share/doc/$PKG/README.md"
 

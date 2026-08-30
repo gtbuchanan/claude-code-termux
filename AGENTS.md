@@ -22,9 +22,8 @@ publish the binary; the `.deb` contains no Anthropic bytes.
 1. `install.sh` enables the `glibc-repo` apt source and `apt install`s the
    `.deb`; `apt` pulls the runtime deps.
 1. `postinst` downloads the `linux-arm64` binary from Anthropic, SHA-256-verifies
-   it, runs `patchelf --set-interpreter` to point it at Termux's glibc loader,
-   and runs `patch-execpath.py` to blank the subprocess `CLAUDE_CODE_EXECPATH`
-   assignment.
+   it, and runs `patchelf --set-interpreter` to point it at Termux's glibc
+   loader. No byte patching of the binary's contents is involved.
 1. The compiled C launcher (`bin/claude`) execs the patched binary —
    `execv` **preserves `argv[0]`** (so Claude's embedded `grep`/`find`/`rg`
    dispatch works), it **overwrites `LD_PRELOAD` with its own freestanding shims**
@@ -68,13 +67,12 @@ publish the binary; the `.deb` contains no Anthropic bytes.
 | Path | Role |
 |---|---|
 | `install.sh` | Single install path. Downloads the latest release `.deb` (or installs a local one via `CLAUDE_CODE_DEB=<path>`), enables `glibc-repo`, `apt install`s it. The install flow is in `main` behind a `CLAUDE_CODE_INSTALL_LIB` guard so the unit test can source its pure helpers without running it (and `curl \| bash` still runs `main`). |
-| `package/control` | Metadata. `Depends: bash, curl, jq, python3, glibc-runner, patchelf-glibc`. |
+| `package/control` | Metadata. `Depends: bash, curl, jq, glibc-runner, patchelf-glibc`. |
 | `package/postinst` | Settings merge (skip via `CLAUDE_CODE_SKIP_SETTINGS`) + native-path symlink (via `link-native.sh`) + fetch the binary. |
 | `package/postrm` | Removes the fetched binary and the native-path symlink on uninstall. |
 | `package/payload/bin/claude-code-termux-update` | Reconcile the native-path symlink (`link-native.sh`), then re-patch only if the version changed (`bootstrap.sh update`; schedulable). `--force` to re-apply. |
-| `package/payload/libexec/bootstrap.sh` | Resolve / download (`curl --retry`, optional `CLAUDE_CODE_CACHE_DIR`) / verify / `patchelf` / execPath-patch engine. |
+| `package/payload/libexec/bootstrap.sh` | Resolve / download (`curl --retry`, optional `CLAUDE_CODE_CACHE_DIR`) / verify / `patchelf` engine. |
 | `package/payload/libexec/link-native.sh` | Idempotent native-path symlink (`~/.local/bin/claude` → launcher) reconcile, shared by `postinst` and the update command. |
-| `package/payload/libexec/patch-execpath.py` | The `CLAUDE_CODE_EXECPATH` patch. |
 | `package/payload/etc/claude-code-termux.conf` | `CLAUDE_CODE_VERSION` pin + `CLAUDE_CODE_CACHE_DIR` (both empty by default). |
 | `src/claude-wrapper.c` | The C launcher (binary, tmpdir, and shim paths baked in at compile). `claude_wrapper_run()` takes its exec function as a parameter — a seam the unit tests fake. |
 | `src/uname-shim.c` | Freestanding `LD_PRELOAD` `uname()` interposer reporting kernel `5.10.0`, so Bun avoids the `epoll_pwait2` startup segfault (bun#32489). Built by `build-wrapper.sh`, shipped to `lib/claude-code-termux/uname-spoof.so`, preloaded by the launcher. |
@@ -177,8 +175,8 @@ produces is visible to a later `test:e2e`.
 For local speed, `docker-run.sh` also mounts gitignored host caches under
 `artifacts/cache/` — the Termux **apt archive** cache (so build/runtime `.deb`s
 aren't re-downloaded; apt still fully installs + resolves) and a **`claude`**
-binary cache via `CLAUDE_CODE_CACHE_DIR` (raw pre-patch bytes; `patchelf` + the
-execPath patch still run). In CI the cache dirs start empty per checkout, so the
+binary cache via `CLAUDE_CODE_CACHE_DIR` (raw pre-patch bytes; `patchelf` still
+runs). In CI the cache dirs start empty per checkout, so the
 cache-hit path is still exercised within a run without persisting across runs.
 
 **termux-docker gotcha:** its entrypoint drops privileges and **sanitizes the
@@ -207,8 +205,9 @@ vars **inline** in the `bash -c` string instead.
   and on a **new** version — gated by an `actions/cache` key per version so it
   runs once per release — calls `ci.yml` pinned to that version. The cache is
   saved only on success (a break is retried daily); a failure opens a
-  deduplicated issue. This catches `patch-execpath.py` anchor breaks (bun
-  minifier identifier rotation) within a day of release.
+  deduplicated issue. This catches a new Claude Code release breaking one of the
+  fixes — a Bun/runtime change the shims no longer cover, or an ELF layout
+  `patchelf` chokes on — within a day of release.
 - **`cd.yml`** (`push: main`): reuses `ci.yml`, then a `release` job **gated by
   the `release` GitHub Environment** (configure required reviewers in repo
   settings for the gate to pause) downloads the built artifact and publishes a

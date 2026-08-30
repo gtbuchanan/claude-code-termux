@@ -31,7 +31,7 @@ claude
 
 `install.sh` enables the glibc package repo (the `glibc-repo` package), then
 downloads the latest release `.deb` and installs it with `apt`, which pulls
-`glibc-runner`, `patchelf-glibc`, `jq`, and `python3` automatically. No manual
+`glibc-runner`, `patchelf-glibc`, and `jq` automatically. No manual
 dependency install is needed. The package's postinstall then downloads and
 patches the Claude Code binary, so `claude` works immediately.
 
@@ -73,10 +73,9 @@ re-downloaded. Leave it empty (the default) to disable caching.
 1. `apt` installs the compiled launcher (`claude`), the bootstrap + patch
    helpers, and a config file, pulling the runtime dependencies.
 1. The package's postinstall downloads the `linux-arm64` binary from Anthropic,
-   verifies its SHA-256, points its ELF interpreter at Termux's glibc loader
-   (`patchelf`), and blanks the subprocess `CLAUDE_CODE_EXECPATH` assignment
-   (`patch-execpath.py`) so embedded-tool re-execs route back through the
-   launcher.
+   verifies its SHA-256, and points its ELF interpreter at Termux's glibc loader
+   (`patchelf`). The binary's contents are left byte-for-byte as Anthropic
+   shipped them.
 1. The compiled launcher execs the patched binary, preserving `argv[0]` so
    Claude's `grep`/`find`/`rg` dispatch works. It overwrites `LD_PRELOAD` with
    small shims of its own: this evicts termux-exec's `libc.so` (which the glibc
@@ -197,7 +196,7 @@ This removes the launcher, the downloaded binary, and the native-path symlink
 - Termux on Android, **aarch64**
 - Network access — the installer enables the `glibc-repo` apt source and
   fetches Claude Code from Anthropic. `glibc-runner` (the glibc loader),
-  `patchelf-glibc`, `jq`, and `python3` are then installed automatically as
+  `patchelf-glibc` and `jq` are then installed automatically as
   package dependencies.
 
 ## Contributing
