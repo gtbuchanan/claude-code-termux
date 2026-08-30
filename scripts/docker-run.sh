@@ -41,7 +41,7 @@ echo "==> Running scripts/$script in termux-docker:aarch64 (${version:-version.s
 #                       `compile` run produces is visible to a later `e2e` run
 #   cache/apt/        → Termux apt archive cache (toolchain + .deb runtime deps)
 #   cache/claude/     → the Claude Code binary, via CLAUDE_CODE_CACHE_DIR (raw,
-#                       pre-patch bytes — patchelf + the execPath patch still run)
+#                       pre-patch bytes — patchelf still runs)
 mkdir -p \
   "$root/artifacts/build" "$root/artifacts/packages" \
   "$root/artifacts/cache/apt/partial" "$root/artifacts/cache/claude"

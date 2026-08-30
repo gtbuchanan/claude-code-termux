@@ -116,8 +116,8 @@ fetch() {
     # Optional raw-binary cache (CLAUDE_CODE_CACHE_DIR): skip the multi-MB
     # download on reinstalls / version rollbacks — handy on slow or metered
     # mobile links. The cache holds the verified RAW bytes (pre-patch), so the
-    # checksum, patchelf, and execPath patch below still run every time; only
-    # the network transfer is skipped.
+    # checksum verification and patchelf below still run every time; only the
+    # network transfer is skipped.
     [ -n "${CLAUDE_CODE_CACHE_DIR:-}" ] && cache="$CLAUDE_CODE_CACHE_DIR/claude-$version-$PLATFORM"
 
     tmp=$(mktemp)
