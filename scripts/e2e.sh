@@ -89,13 +89,14 @@ oneTimeSetUp() {
   # Probe whose BINARY is `env`, so the TMPDIR tests can read the environment the
   # wrapper hands to the exec'd process. It must be named `env`: the wrapper
   # preserves argv[0], and Termux's `env` is the coreutils multiplexer that
-  # dispatches on argv[0]'s basename. UNAME_SHIM points at the installed shim
-  # (already staged by the install above) — the wrapper LD_PRELOADs it, and
+  # dispatches on argv[0]'s basename. The shim paths point at the installed shims
+  # (already staged by the install above) — the wrapper LD_PRELOADs them, and
   # bionic's linker aborts on a missing preload.
   probe="$(mktemp -d)/env"
   clang -O2 -DBINARY="\"$PREFIX/bin/env\"" -DTMPDIR_PATH="\"/PROBE_TMPDIR\"" \
     -DUNAME_SHIM="\"$PREFIX/lib/claude-code-termux/uname-spoof.so\"" \
     -DRESOLV_SHIM="\"$PREFIX/lib/claude-code-termux/resolv-redirect.so\"" \
+    -DEXECPATH_SHIM="\"$PREFIX/lib/claude-code-termux/execpath-redirect.so\"" \
     -o "$probe" src/claude-wrapper.c >&2 || fatal "probe compile failed"
 }
 
@@ -127,6 +128,24 @@ test_resolv_shim_has_no_dt_needed() {
   rc=$?
   assertEquals 'patchelf --print-needed ran' 0 "$rc"
   assertNull 'resolv-redirect.so has no DT_NEEDED (no libdl.so)' "$needed"
+}
+test_execpath_shim_installed() {
+  assertTrue 'execpath-redirect.so installed' \
+    "[ -f '$PREFIX/lib/claude-code-termux/execpath-redirect.so' ]"
+}
+test_execpath_shim_is_elf() {
+  assertEquals 'execpath-redirect.so is an ELF' \
+    7f454c46 "$(elf_magic "$PREFIX/lib/claude-code-termux/execpath-redirect.so")"
+}
+# Same constraint as the resolv shim: a DT_NEEDED (libdl.so) would break the
+# glibc ld.so load. See src/execpath-shim.c.
+test_execpath_shim_has_no_dt_needed() {
+  local needed rc
+  needed=$(LD_PRELOAD='' "$patchelf" --print-needed \
+    "$PREFIX/lib/claude-code-termux/execpath-redirect.so")
+  rc=$?
+  assertEquals 'patchelf --print-needed ran' 0 "$rc"
+  assertNull 'execpath-redirect.so has no DT_NEEDED (no libdl.so)' "$needed"
 }
 test_bootstrap_installed() {
   assertTrue 'bootstrap.sh installed + executable' \
@@ -318,6 +337,57 @@ EOF
     MISS "$("$dir/opener" "$src" 2>&1)"
   assertContains 'shim redirects fopen(SRC) to the configured target' \
     "$(LD_PRELOAD="$dir/resolv-redirect.so" "$dir/opener" "$src" 2>&1)" '203.0.113.1'
+  rm -rf "$dir"
+}
+
+# execpath redirect: compile a shim variant with a sentinel launcher path (the
+# probe pattern) + a spawner that posix_spawns `env` with a chosen environment,
+# then prove CLAUDE_CODE_EXECPATH is rewritten in the child. This is the fix for
+# #61 — the embedded ugrep/bfs re-exec reads that variable, and pointing it at
+# the raw binary rather than the launcher is what crashes glibc's ld.so.
+# Exercises src/execpath-shim.c directly, independent of a Claude version.
+test_execpath_redirect_rewrites_child_env() {
+  local dir rc
+  dir=$(mktemp -d)
+  clang -O2 -Wall -Wextra -Werror -shared -fPIC -nostdlib -ffreestanding \
+    -fno-stack-protector -fno-builtin \
+    -DLAUNCHER_PATH='"/SENTINEL_LAUNCHER"' \
+    -o "$dir/execpath-redirect.so" src/execpath-shim.c 2>"$dir/cc.log"
+  rc=$?
+  assertEquals "execpath shim test build ($(cat "$dir/cc.log"))" 0 "$rc"
+  # Spawns Termux's `env` so the child's environment is printed verbatim. argv[1]
+  # picks whether CLAUDE_CODE_EXECPATH is present in the environment handed to
+  # posix_spawn, covering both the replace and the leave-alone path. The
+  # prototypes are declared here rather than taken from <spawn.h>/<sys/wait.h>:
+  # bionic gates its posix_spawn declaration behind __ANDROID_API__ >= 28, and
+  # the toolchain in the container targets lower. pid_t is int on aarch64.
+  cat >"$dir/spawner.c" <<EOF
+extern int posix_spawn(int *, const char *, const void *, const void *,
+                       char *const *, char *const *);
+extern int waitpid(int, int *, int);
+int main(int argc, char **argv) {
+  char *with[] = {"CLAUDE_CODE_EXECPATH=/ORIGINAL_BINARY", "MARKER=1", 0};
+  char *without[] = {"MARKER=1", 0};
+  char *args[] = {"env", 0};
+  char **e = (argc > 1 && argv[1][0] == 'n') ? without : with;
+  int pid, status;
+  if (posix_spawn(&pid, "$PREFIX/bin/env", 0, 0, args, e) != 0) return 1;
+  waitpid(pid, &status, 0);
+  return 0;
+}
+EOF
+  clang -O2 -o "$dir/spawner" "$dir/spawner.c" 2>"$dir/spawner.log"
+  rc=$?
+  assertEquals "spawner test build ($(cat "$dir/spawner.log"))" 0 "$rc"
+  assertContains 'child keeps the original value without the shim' \
+    "$("$dir/spawner" 2>&1)" 'CLAUDE_CODE_EXECPATH=/ORIGINAL_BINARY'
+  assertContains 'shim rewrites CLAUDE_CODE_EXECPATH to the launcher' \
+    "$(LD_PRELOAD="$dir/execpath-redirect.so" "$dir/spawner" 2>&1)" \
+    'CLAUDE_CODE_EXECPATH=/SENTINEL_LAUNCHER'
+  # Replace-only, never append: an unrelated child must not gain the variable.
+  assertNotContains 'shim does not inject the variable when absent' \
+    "$(LD_PRELOAD="$dir/execpath-redirect.so" "$dir/spawner" none 2>&1)" \
+    'CLAUDE_CODE_EXECPATH'
   rm -rf "$dir"
 }
 

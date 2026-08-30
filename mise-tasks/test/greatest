@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #MISE description="Unit-test the C launcher with greatest natively (fast; no Docker)"
 # Keep Git Bash / MSYS from rewriting the leading-slash sentinel paths
-# (BINARY/TMPDIR_PATH/UNAME_SHIM/RESOLV_SHIM below) into Windows paths on the way
-# to zig (no-op elsewhere).
+# (BINARY/TMPDIR_PATH/UNAME_SHIM/RESOLV_SHIM/EXECPATH_SHIM below) into Windows
+# paths on the way to zig (no-op elsewhere).
 #MISE env={ MSYS_NO_PATHCONV = "1" }
 #
 # Compiles src/claude-wrapper.c with zig and runs it directly — no Termux, no
@@ -20,6 +20,7 @@ BINARY=/claude-code-termux-test/claude
 TMPDIR_PATH=/claude-code-termux-test/tmp
 UNAME_SHIM=/claude-code-termux-test/uname-spoof.so
 RESOLV_SHIM=/claude-code-termux-test/resolv-redirect.so
+EXECPATH_SHIM=/claude-code-termux-test/execpath-redirect.so
 
 out="$MISE_PROJECT_ROOT/artifacts/build"
 mkdir -p "$out"
@@ -34,6 +35,7 @@ case "${OSTYPE:-}" in msys* | cygwin* | win*) bin="$bin.exe" ;; esac
 zig cc -O2 -Wall -Wextra -Werror \
   -DBINARY="\"$BINARY\"" -DTMPDIR_PATH="\"$TMPDIR_PATH\"" \
   -DUNAME_SHIM="\"$UNAME_SHIM\"" -DRESOLV_SHIM="\"$RESOLV_SHIM\"" \
+  -DEXECPATH_SHIM="\"$EXECPATH_SHIM\"" \
   -DCLAUDE_WRAPPER_NO_MAIN \
   -include "$MISE_PROJECT_ROOT/test/compat.h" \
   -I "$MISE_PROJECT_ROOT/vendor" \
