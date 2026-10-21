@@ -111,7 +111,7 @@ checksum = "sha256:f9683a19877e12a9b167305c8db71040d812876359de21f0d2e97c3f321f8
 url = "https://nodejs.org/dist/v24.22.0/node-v24.22.0-win-x64.zip"
 
 [[tools."npm:@gtbuchanan/cli"]]
-version = "0.6.0"
+version = "0.7.1"
 backend = "npm:@gtbuchanan/cli"
 
 [[tools."npm:renovate"]]
