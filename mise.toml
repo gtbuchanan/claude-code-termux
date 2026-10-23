@@ -44,7 +44,7 @@ includes = ["mise-tasks", "mise.tasks.toml"]
 [tools]
 actionlint = "1.7.12"
 hk = "2.7.0"
-node = "24.22.0"
+node = "24.22.1"
 "npm:@gtbuchanan/cli" = "1.0.0"
 "npm:renovate" = "43.233.1"
 "pipx:clang-format" = "23.1.3"
