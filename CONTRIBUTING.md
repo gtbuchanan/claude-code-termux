@@ -26,7 +26,9 @@ binary against the recorded sha256. `[settings] lockfile = true` keeps the
 lockfile self-perpetuating: a local `mise.toml` edit re-runs through `mise
 install` and rewrites `mise.lock`. CI runs with `MISE_LOCKED=1` and fails loudly
 on any drift between the two files (analogous to a frozen lockfile), so commit
-the regenerated `mise.lock` alongside any tool change.
+the regenerated `mise.lock` alongside any tool change. npm and pipx tools also
+lock their dependency graphs in sidecars under `.mise/locks/`, which `mise.lock`
+references by digest; commit those with it.
 
 ## Tasks
 

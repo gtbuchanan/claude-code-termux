@@ -99,7 +99,9 @@ publish the binary; the `.deb` contains no Anthropic bytes.
 [mise](https://mise.jdx.dev) pins the host-side dev tooling and runs the dev
 tasks. `mise.lock` (`lockfile = true`) records checksum-verified URLs for all
 common platforms so installs are reproducible across the Windows/arm64 dev
-hosts and the Linux CI runner.
+hosts and the Linux CI runner. It is lockfile format 3 (hence `min_version`):
+npm and pipx tools lock their dependency graphs in sidecars under
+`.mise/locks/`, which change with `mise.lock` and are committed with it.
 
 - `mise install` — install the pinned tools; the `hk install --mise`
   postinstall wires up hk's Git hooks. Run once after cloning.
