@@ -133,9 +133,12 @@ main() {
   # front, so a repo added mid-transaction wouldn't be consulted. A failed
   # refresh is tolerated while a cached index still lists glibc-repo; without
   # it the install aborts here with the remedy, before apt fails on it.
+  # --error-on=any, because apt-get update otherwise exits 0 when some index
+  # fetches fail, which would pass the failure off as a mirror lacking the
+  # package.
   log "Enabling the glibc package repo…"
   local update_rc=0
-  apt-get update -y || update_rc=$?
+  apt-get update --error-on=any -y || update_rc=$?
   apt-cache show glibc-repo >/dev/null 2>&1 ||
     die "$(glibc_repo_missing_reason "$update_rc")"
   apt-get install -y glibc-repo
