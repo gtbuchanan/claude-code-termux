@@ -72,6 +72,19 @@ play_build() {
   printf '%s\n' "$2" | grep -qE '^[^#]*://termux\.net([/[:space:]]|$)'
 }
 
+# Explain why apt cannot find glibc-repo, given the exit status of the
+# preceding `apt-get update` ($1). Every build that reaches this check has
+# glibc-repo in termux-main, so after a good refresh a miss means the mirror
+# lacks it. After a failed one the index may be missing or stale, which says
+# nothing about the mirror.
+glibc_repo_missing_reason() {
+  if [ "$1" -eq 0 ]; then
+    echo "this Termux mirror has no glibc-repo package. Pick another mirror with termux-change-repo, then re-run this installer."
+  else
+    echo "apt-get update failed (exit $1), so apt cannot see glibc-repo. Fix the error above (network, signing key, or an unreachable mirror: termux-change-repo), then re-run this installer."
+  fi
+}
+
 main() {
   set -euo pipefail
 
@@ -124,12 +137,14 @@ main() {
   # glibc-runner and patchelf-glibc live in the glibc-packages repo, which the
   # `glibc-repo` package enables. It must be added (and the index refreshed)
   # BEFORE installing the package — apt resolves the whole dependency graph up
-  # front, so a repo added mid-transaction wouldn't be consulted. A mirror
-  # without glibc-repo aborts here with the remedy, before apt fails on it.
+  # front, so a repo added mid-transaction wouldn't be consulted. A failed
+  # refresh is tolerated while a cached index still lists glibc-repo; without
+  # it the install aborts here with the remedy, before apt fails on it.
   log "Enabling the glibc package repo…"
-  apt-get update -y || true
+  local update_rc=0
+  apt-get update -y || update_rc=$?
   apt-cache show glibc-repo >/dev/null 2>&1 ||
-    die "this Termux mirror has no glibc-repo package. Pick another mirror with termux-change-repo, then re-run this installer."
+    die "$(glibc_repo_missing_reason "$update_rc")"
   apt-get install -y glibc-repo
   apt-get update -y
 

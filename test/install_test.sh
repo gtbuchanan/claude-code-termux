@@ -109,6 +109,20 @@ test_play_build_false_for_other_build() {
   assertFalse 'another version on another mirror is not the Play build' $?
 }
 
+test_glibc_repo_missing_reason_after_refresh() {
+  local reason
+  reason="$(glibc_repo_missing_reason 0)"
+  assertContains 'a refreshed index without glibc-repo blames the mirror' "$reason" 'no glibc-repo'
+  assertNotContains 'a refreshed index is not reported as a failed refresh' "$reason" 'update failed'
+}
+
+test_glibc_repo_missing_reason_after_failed_refresh() {
+  local reason
+  reason="$(glibc_repo_missing_reason 100)"
+  assertContains 'a failed refresh is reported as such' "$reason" 'update failed'
+  assertNotContains 'a failed refresh does not claim the mirror lacks glibc-repo' "$reason" 'no glibc-repo'
+}
+
 # shUnit2 hands control here: it discovers the test_* functions above and prints
 # the summary.
 # shellcheck source=/dev/null
