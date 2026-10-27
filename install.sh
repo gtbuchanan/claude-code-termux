@@ -58,6 +58,23 @@ asset_digest() {
     sed -E 's/.*"sha256:([0-9a-f]{64})".*/\1/'
 }
 
+# Explain why apt cannot find glibc-repo, given the app's TERMUX_APK_RELEASE
+# ($1) and the concatenated apt sources ($2). The Google Play build installs
+# from termux.net, which omits glibc-repo, and its target SDK forbids executing
+# app-data files, so a glibc program cannot start there even with the packages
+# (termux-exec's /system/bin/linker64 route loads bionic programs only). Any
+# other build has glibc-repo in termux-main, so a miss there is a mirror that
+# lacks it. The termux.net source catches the Play build in an environment that
+# did not inherit TERMUX_APK_RELEASE.
+glibc_repo_missing_reason() {
+  if [ "$1" = GOOGLE_PLAY_STORE ] ||
+    printf '%s\n' "$2" | grep -qE '://termux\.net([/[:space:]]|$)'; then
+    echo "Termux from Google Play cannot run glibc programs, which Claude Code is. Install Termux from F-Droid (https://f-droid.org/packages/com.termux/) or GitHub (https://github.com/termux/termux-app/releases) instead; the builds are signed differently, so uninstall the Play build first (back up \$HOME), then re-run this installer."
+  else
+    echo "this Termux mirror has no glibc-repo package. Pick another mirror with termux-change-repo, then re-run this installer."
+  fi
+}
+
 main() {
   set -euo pipefail
 
@@ -101,9 +118,14 @@ main() {
   # glibc-runner and patchelf-glibc live in the glibc-packages repo, which the
   # `glibc-repo` package enables. It must be added (and the index refreshed)
   # BEFORE installing the package — apt resolves the whole dependency graph up
-  # front, so a repo added mid-transaction wouldn't be consulted.
+  # front, so a repo added mid-transaction wouldn't be consulted. A repository
+  # without glibc-repo aborts here with the reason, before apt fails on it.
   log "Enabling the glibc package repo…"
   apt-get update -y || true
+  local apt_dir="${PREFIX:-/data/data/com.termux/files/usr}/etc/apt"
+  apt-cache show glibc-repo >/dev/null 2>&1 ||
+    die "$(glibc_repo_missing_reason "${TERMUX_APK_RELEASE:-}" \
+      "$(cat "$apt_dir"/sources.list "$apt_dir"/sources.list.d/* 2>/dev/null || true)")"
   apt-get install -y glibc-repo
   apt-get update -y
 

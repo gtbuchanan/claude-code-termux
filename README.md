@@ -193,7 +193,12 @@ This removes the launcher, the downloaded binary, and the native-path symlink
 
 ## Prerequisites
 
-- Termux on Android, **aarch64**
+- Termux on Android, **aarch64**, from
+  [F-Droid](https://f-droid.org/packages/com.termux/) or
+  [GitHub](https://github.com/termux/termux-app/releases). The Google Play build
+  is unsupported: its repository omits the glibc packages, and its newer target
+  SDK blocks executing the glibc loader at all. The installer detects it and
+  stops before installing anything.
 - Network access — the installer enables the `glibc-repo` apt source and
   fetches Claude Code from Anthropic. `glibc-runner` (the glibc loader),
   `patchelf-glibc` and `jq` are then installed automatically as
