@@ -59,15 +59,16 @@ asset_digest() {
 }
 
 # Succeed when this is the Google Play build of Termux, given the app's
-# TERMUX_APK_RELEASE ($1) and the concatenated apt sources ($2). That build
-# cannot run Claude Code whatever its repository: its target SDK forbids
-# executing app-data files, and termux-exec's /system/bin/linker64 route loads
-# bionic programs only, so the glibc loader cannot start. Its termux.net
-# repository also omits glibc-repo. The termux.net source catches the Play
-# build in an environment that did not inherit TERMUX_APK_RELEASE.
+# TERMUX_VERSION ($1) and the concatenated apt sources ($2). That build cannot
+# run Claude Code whatever its repository: its target SDK forbids executing
+# app-data files, and termux-exec's /system/bin/linker64 route loads bionic
+# programs only, so the glibc loader cannot start. Its termux.net repository
+# also omits glibc-repo. The app sets TERMUX_VERSION to its versionName,
+# googleplay.<date>, and never sets TERMUX_APK_RELEASE; the termux.net source
+# catches it in an environment that did not inherit TERMUX_VERSION.
 play_build() {
-  [ "$1" = GOOGLE_PLAY_STORE ] ||
-    printf '%s\n' "$2" | grep -qE '://termux\.net([/[:space:]]|$)'
+  case "$1" in googleplay.*) return 0 ;; esac
+  printf '%s\n' "$2" | grep -qE '://termux\.net([/[:space:]]|$)'
 }
 
 main() {
@@ -77,7 +78,7 @@ main() {
   command -v apt-get >/dev/null 2>&1 || die "apt-get not found — this installer is for Termux."
 
   local apt_dir="${PREFIX:-/data/data/com.termux/files/usr}/etc/apt"
-  if play_build "${TERMUX_APK_RELEASE:-}" \
+  if play_build "${TERMUX_VERSION:-}" \
     "$(cat "$apt_dir"/sources.list "$apt_dir"/sources.list.d/* 2>/dev/null || true)"; then
     die "Termux from Google Play cannot run glibc programs, which Claude Code is. Install Termux from F-Droid (https://f-droid.org/packages/com.termux/) or GitHub (https://github.com/termux/termux-app/releases) instead; the builds are signed differently, so uninstall the Play build first (back up \$HOME), then re-run this installer."
   fi

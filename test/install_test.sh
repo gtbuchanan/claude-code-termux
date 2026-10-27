@@ -84,9 +84,9 @@ test_asset_digest_empty_when_absent() {
 
 OTHER_MIRROR='deb https://mirror.example.org/termux/termux-main stable main'
 
-test_play_build_by_release() {
-  play_build GOOGLE_PLAY_STORE "$OTHER_MIRROR"
-  assertTrue 'the Play release marks the Play build whatever the source' $?
+test_play_build_by_version() {
+  play_build googleplay.2026.06.21 "$OTHER_MIRROR"
+  assertTrue 'a googleplay. version marks the Play build whatever the source' $?
 }
 
 test_play_build_by_termux_net_one_line() {
@@ -100,8 +100,8 @@ test_play_build_by_termux_net_deb822() {
 }
 
 test_play_build_false_for_other_build() {
-  play_build F_DROID "$OTHER_MIRROR"
-  assertFalse 'another release on another mirror is not the Play build' $?
+  play_build 0.118.3 "$OTHER_MIRROR"
+  assertFalse 'another version on another mirror is not the Play build' $?
 }
 
 # shUnit2 hands control here: it discovers the test_* functions above and prints
