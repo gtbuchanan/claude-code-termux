@@ -132,10 +132,10 @@ backend = "npm:@gtbuchanan/cli"
 specifiers = ["1.0.0"]
 
 [[tools."npm:renovate"]]
-version = "43.233.1"
-aube = { path = ".mise/locks/npm-renovate/43.233.1~aa673d8d", digest = "sha256:fafd6de2659dc04904cf1cc929474760d78db6b9a86e1a932cddf1e88b3017cd" }
+version = "43.288.0"
+aube = { path = ".mise/locks/npm-renovate/43.288.0~aa673d8d", digest = "sha256:39ef78ff3c5e3aeab2d992b424e6206918bdfdb802e126f5431d5a9899bed16b" }
 backend = "npm:renovate"
-specifiers = ["43.233.1"]
+specifiers = ["43.288.0"]
 
 [tools."npm:renovate".options]
 trust_policy_excludes = '["@yarnpkg/libzip@3.2.2"]'
