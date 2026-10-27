@@ -65,10 +65,11 @@ asset_digest() {
 # programs only, so the glibc loader cannot start. Its termux.net repository
 # also omits glibc-repo. The app sets TERMUX_VERSION to its versionName,
 # googleplay.<date>, and never sets TERMUX_APK_RELEASE; the termux.net source
-# catches it in an environment that did not inherit TERMUX_VERSION.
+# catches it in an environment that did not inherit TERMUX_VERSION. A source
+# commented out with # is one apt ignores, so it does not count.
 play_build() {
   case "$1" in googleplay.*) return 0 ;; esac
-  printf '%s\n' "$2" | grep -qE '://termux\.net([/[:space:]]|$)'
+  printf '%s\n' "$2" | grep -qE '^[^#]*://termux\.net([/[:space:]]|$)'
 }
 
 main() {
@@ -77,9 +78,12 @@ main() {
   command -v curl >/dev/null 2>&1 || die "missing 'curl' — pkg install curl"
   command -v apt-get >/dev/null 2>&1 || die "apt-get not found — this installer is for Termux."
 
+  # Only the files apt reads: sources.list.d also collects backups like
+  # *.list.save, which apt skips by extension.
   local apt_dir="${PREFIX:-/data/data/com.termux/files/usr}/etc/apt"
   if play_build "${TERMUX_VERSION:-}" \
-    "$(cat "$apt_dir"/sources.list "$apt_dir"/sources.list.d/* 2>/dev/null || true)"; then
+    "$(cat "$apt_dir"/sources.list "$apt_dir"/sources.list.d/*.list \
+      "$apt_dir"/sources.list.d/*.sources 2>/dev/null || true)"; then
     die "Termux from Google Play cannot run glibc programs, which Claude Code is. Install Termux from F-Droid (https://f-droid.org/packages/com.termux/) or GitHub (https://github.com/termux/termux-app/releases) instead; the builds are signed differently, so uninstall the Play build first (back up \$HOME), then re-run this installer."
   fi
 

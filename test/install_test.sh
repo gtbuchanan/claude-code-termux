@@ -99,6 +99,11 @@ test_play_build_by_termux_net_deb822() {
   assertTrue 'a termux.net deb822 source marks the Play build' $?
 }
 
+test_play_build_ignores_commented_source() {
+  play_build 0.118.3 "$(printf '# deb https://termux.net stable main\n%s\n' "$OTHER_MIRROR")"
+  assertFalse 'a commented-out termux.net source does not mark the Play build' $?
+}
+
 test_play_build_false_for_other_build() {
   play_build 0.118.3 "$OTHER_MIRROR"
   assertFalse 'another version on another mirror is not the Play build' $?
