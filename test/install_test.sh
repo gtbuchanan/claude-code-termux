@@ -82,6 +82,40 @@ test_asset_digest_empty_when_absent() {
     '{"assets":[{"browser_download_url":"https://example.com/x_aarch64.deb"}]}'
 }
 
+test_play_build_by_version() {
+  play_build googleplay.2026.06.21
+  assertTrue 'a googleplay. version marks the Play build' $?
+}
+
+test_play_build_ignores_sources() {
+  play_build 0.118.3 'deb https://termux.net stable main'
+  assertFalse 'a termux.net source alone does not mark the Play build' $?
+}
+
+test_play_build_false_for_other_version() {
+  play_build 0.118.3
+  assertFalse 'another version is not the Play build' $?
+}
+
+test_play_build_false_when_unset() {
+  play_build ''
+  assertFalse 'an unset version is not the Play build' $?
+}
+
+test_glibc_repo_missing_reason_after_refresh() {
+  local reason
+  reason="$(glibc_repo_missing_reason 0)"
+  assertContains 'a refreshed index without glibc-repo blames the mirror' "$reason" 'no glibc-repo'
+  assertNotContains 'a refreshed index is not reported as a failed refresh' "$reason" 'update failed'
+}
+
+test_glibc_repo_missing_reason_after_failed_refresh() {
+  local reason
+  reason="$(glibc_repo_missing_reason 100)"
+  assertContains 'a failed refresh is reported as such' "$reason" 'update failed'
+  assertNotContains 'a failed refresh does not claim the mirror lacks glibc-repo' "$reason" 'no glibc-repo'
+}
+
 # shUnit2 hands control here: it discovers the test_* functions above and prints
 # the summary.
 # shellcheck source=/dev/null

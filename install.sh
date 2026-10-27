@@ -58,11 +58,40 @@ asset_digest() {
     sed -E 's/.*"sha256:([0-9a-f]{64})".*/\1/'
 }
 
+# Succeed when this is the Google Play build of Termux, given the app's
+# TERMUX_VERSION ($1). That build cannot run Claude Code whatever its
+# repository: its target SDK forbids executing app-data files, and
+# termux-exec's /system/bin/linker64 route loads bionic programs only, so the
+# glibc loader cannot start. Its termux.net repository also omits glibc-repo.
+# The app sets TERMUX_VERSION to its versionName, googleplay.<date>, and never
+# sets TERMUX_APK_RELEASE. A Play shell that lost TERMUX_VERSION reaches the
+# glibc-repo check instead, which still stops the install.
+play_build() {
+  case "$1" in googleplay.*) return 0 ;; *) return 1 ;; esac
+}
+
+# Explain why apt cannot find glibc-repo, given the exit status of the
+# preceding `apt-get update` ($1). Every build that reaches this check has
+# glibc-repo in termux-main, so after a good refresh a miss means the mirror
+# lacks it. After a failed one the index may be missing or stale, which says
+# nothing about the mirror.
+glibc_repo_missing_reason() {
+  if [ "$1" -eq 0 ]; then
+    echo "this Termux mirror has no glibc-repo package. Pick another mirror with termux-change-repo, then re-run this installer."
+  else
+    echo "apt-get update failed (exit $1), so apt cannot see glibc-repo. Fix the error above (network, signing key, or an unreachable mirror: termux-change-repo), then re-run this installer."
+  fi
+}
+
 main() {
   set -euo pipefail
 
   command -v curl >/dev/null 2>&1 || die "missing 'curl' — pkg install curl"
   command -v apt-get >/dev/null 2>&1 || die "apt-get not found — this installer is for Termux."
+
+  if play_build "${TERMUX_VERSION:-}"; then
+    die "Termux from Google Play cannot run glibc programs, which Claude Code is. Install Termux from F-Droid (https://f-droid.org/packages/com.termux/) or GitHub (https://github.com/termux/termux-app/releases) instead; the builds are signed differently, so uninstall the Play build first (back up \$HOME), then re-run this installer."
+  fi
 
   # Not `local`: the EXIT trap below fires after main() returns and reads $deb,
   # which a local would put out of scope (unbound under set -u).
@@ -101,9 +130,17 @@ main() {
   # glibc-runner and patchelf-glibc live in the glibc-packages repo, which the
   # `glibc-repo` package enables. It must be added (and the index refreshed)
   # BEFORE installing the package — apt resolves the whole dependency graph up
-  # front, so a repo added mid-transaction wouldn't be consulted.
+  # front, so a repo added mid-transaction wouldn't be consulted. A failed
+  # refresh is tolerated while a cached index still lists glibc-repo; without
+  # it the install aborts here with the remedy, before apt fails on it.
+  # --error-on=any, because apt-get update otherwise exits 0 when some index
+  # fetches fail, which would pass the failure off as a mirror lacking the
+  # package.
   log "Enabling the glibc package repo…"
-  apt-get update -y || true
+  local update_rc=0
+  apt-get update --error-on=any -y || update_rc=$?
+  apt-cache show glibc-repo >/dev/null 2>&1 ||
+    die "$(glibc_repo_missing_reason "$update_rc")"
   apt-get install -y glibc-repo
   apt-get update -y
 
