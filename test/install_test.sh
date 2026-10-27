@@ -82,31 +82,24 @@ test_asset_digest_empty_when_absent() {
     '{"assets":[{"browser_download_url":"https://example.com/x_aarch64.deb"}]}'
 }
 
-OTHER_MIRROR='deb https://mirror.example.org/termux/termux-main stable main'
-
 test_play_build_by_version() {
-  play_build googleplay.2026.06.21 "$OTHER_MIRROR"
-  assertTrue 'a googleplay. version marks the Play build whatever the source' $?
+  play_build googleplay.2026.06.21
+  assertTrue 'a googleplay. version marks the Play build' $?
 }
 
-test_play_build_by_termux_net_one_line() {
-  play_build '' 'deb https://termux.net stable main'
-  assertTrue 'a termux.net one-line source marks the Play build' $?
+test_play_build_ignores_sources() {
+  play_build 0.118.3 'deb https://termux.net stable main'
+  assertFalse 'a termux.net source alone does not mark the Play build' $?
 }
 
-test_play_build_by_termux_net_deb822() {
-  play_build '' "$(printf 'Types: deb\nURIs: https://termux.net/\nSuites: stable\n')"
-  assertTrue 'a termux.net deb822 source marks the Play build' $?
+test_play_build_false_for_other_version() {
+  play_build 0.118.3
+  assertFalse 'another version is not the Play build' $?
 }
 
-test_play_build_ignores_commented_source() {
-  play_build 0.118.3 "$(printf '# deb https://termux.net stable main\n%s\n' "$OTHER_MIRROR")"
-  assertFalse 'a commented-out termux.net source does not mark the Play build' $?
-}
-
-test_play_build_false_for_other_build() {
-  play_build 0.118.3 "$OTHER_MIRROR"
-  assertFalse 'another version on another mirror is not the Play build' $?
+test_play_build_false_when_unset() {
+  play_build ''
+  assertFalse 'an unset version is not the Play build' $?
 }
 
 test_glibc_repo_missing_reason_after_refresh() {
