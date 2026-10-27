@@ -82,26 +82,26 @@ test_asset_digest_empty_when_absent() {
     '{"assets":[{"browser_download_url":"https://example.com/x_aarch64.deb"}]}'
 }
 
-test_glibc_repo_missing_reason_play_release() {
-  assertContains 'the Play build is told to switch to F-Droid or GitHub' \
-    "$(glibc_repo_missing_reason GOOGLE_PLAY_STORE 'deb https://termux.net stable main')" 'F-Droid'
+OTHER_MIRROR='deb https://mirror.example.org/termux/termux-main stable main'
+
+test_play_build_by_release() {
+  play_build GOOGLE_PLAY_STORE "$OTHER_MIRROR"
+  assertTrue 'the Play release marks the Play build whatever the source' $?
 }
 
-test_glibc_repo_missing_reason_play_repo_one_line() {
-  assertContains 'a termux.net one-line source marks the Play build' \
-    "$(glibc_repo_missing_reason '' 'deb https://termux.net stable main')" 'F-Droid'
+test_play_build_by_termux_net_one_line() {
+  play_build '' 'deb https://termux.net stable main'
+  assertTrue 'a termux.net one-line source marks the Play build' $?
 }
 
-test_glibc_repo_missing_reason_play_repo_deb822() {
-  assertContains 'a termux.net deb822 source marks the Play build' \
-    "$(glibc_repo_missing_reason '' "$(printf 'Types: deb\nURIs: https://termux.net/\nSuites: stable\n')")" 'F-Droid'
+test_play_build_by_termux_net_deb822() {
+  play_build '' "$(printf 'Types: deb\nURIs: https://termux.net/\nSuites: stable\n')"
+  assertTrue 'a termux.net deb822 source marks the Play build' $?
 }
 
-test_glibc_repo_missing_reason_other_mirror() {
-  local reason
-  reason="$(glibc_repo_missing_reason F_DROID 'deb https://mirror.example.org/termux/termux-main stable main')"
-  assertContains 'any other build is told to change mirrors' "$reason" 'termux-change-repo'
-  assertNotContains 'any other build is not blamed on Google Play' "$reason" 'Google Play'
+test_play_build_false_for_other_build() {
+  play_build F_DROID "$OTHER_MIRROR"
+  assertFalse 'another release on another mirror is not the Play build' $?
 }
 
 # shUnit2 hands control here: it discovers the test_* functions above and prints

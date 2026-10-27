@@ -66,7 +66,7 @@ publish the binary; the `.deb` contains no Anthropic bytes.
 
 | Path | Role |
 |---|---|
-| `install.sh` | Single install path. Downloads the latest release `.deb` (or installs a local one via `CLAUDE_CODE_DEB=<path>`), enables `glibc-repo` (aborting with the reason when apt can't find it — the Google Play build's `termux.net` omits it, and that build can't exec a glibc loader anyway), `apt install`s it. The install flow is in `main` behind a `CLAUDE_CODE_INSTALL_LIB` guard so the unit test can source its pure helpers without running it (and `curl \| bash` still runs `main`). |
+| `install.sh` | Single install path. Downloads the latest release `.deb` (or installs a local one via `CLAUDE_CODE_DEB=<path>`), refuses the Google Play build up front (it can't exec a glibc loader, and its `termux.net` omits `glibc-repo`), enables `glibc-repo` (aborting with the remedy when the mirror lacks it), `apt install`s it. The install flow is in `main` behind a `CLAUDE_CODE_INSTALL_LIB` guard so the unit test can source its pure helpers without running it (and `curl \| bash` still runs `main`). |
 | `package/control` | Metadata. `Depends: bash, curl, jq, glibc-runner, patchelf-glibc`. |
 | `package/postinst` | Settings merge (skip via `CLAUDE_CODE_SKIP_SETTINGS`) + native-path symlink (via `link-native.sh`) + fetch the binary. |
 | `package/postrm` | Removes the fetched binary and the native-path symlink on uninstall. |
