@@ -7,9 +7,8 @@
 min_version = "2026.10.18"
 
 [env]
-# hk wraps each hook step in `mise x`, so its mise-managed linter binaries
-# (actionlint, shellcheck, shfmt, ruff, clang-format, renovate-config-validator)
-# resolve without shell activation.
+# hk wraps each hook step in `mise x`, so the linters mise manages resolve
+# without shell activation.
 HK_MISE = "1"
 
 [hooks]
@@ -45,8 +44,8 @@ includes = ["mise-tasks", "mise.tasks.toml"]
 # the C launcher + its unit tests. The rest are the per-language linters hk's
 # builtins shell out to.
 [tools]
-actionlint = "1.7.12"
-hk = "2.8.1"
+hk = "2.11.0"
+jactionlint = "v2.4.0"
 node = "26.13.0"
 "npm:@gtbuchanan/cli" = "2.0.0"
 # Exempt transitive `@yarnpkg/libzip@3.2.2` from aube's no-downgrade policy.
