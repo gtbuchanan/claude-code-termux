@@ -44,7 +44,7 @@ includes = ["mise-tasks", "mise.tasks.toml"]
 # the C launcher + its unit tests. The rest are the per-language linters hk's
 # builtins shell out to.
 [tools]
-hk = "2.11.0"
+hk = "2.11.1"
 jactionlint = "v2.4.0"
 node = "26.13.0"
 "npm:@gtbuchanan/cli" = "2.0.0"
