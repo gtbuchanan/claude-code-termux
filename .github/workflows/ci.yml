@@ -29,7 +29,7 @@ jobs:
     name: Unit Tests
     # The C launcher's logic is pure POSIX, so its unit tests build + run
     # natively via mise's zig in seconds — no Termux/Docker.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
         with:
@@ -42,7 +42,7 @@ jobs:
   # break surface separately.
   compile:
     name: Compile
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     steps:
       - uses: actions/checkout@v7
         with:
@@ -59,7 +59,7 @@ jobs:
   e2e:
     name: E2E Test
     needs: compile
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     steps:
       - uses: actions/checkout@v7
         with:
