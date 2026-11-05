@@ -7,9 +7,8 @@
 min_version = "2026.10.18"
 
 [env]
-# hk wraps each hook step in `mise x`, so its mise-managed linter binaries
-# (jactionlint, shellcheck, shfmt, ruff, clang-format, renovate-config-validator)
-# resolve without shell activation.
+# hk wraps each hook step in `mise x`, so the linters mise manages resolve
+# without shell activation.
 HK_MISE = "1"
 
 [hooks]
