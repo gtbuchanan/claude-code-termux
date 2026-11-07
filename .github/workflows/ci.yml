@@ -23,7 +23,7 @@ jobs:
     if: github.event_name == 'pull_request'
     # use-pnpm defaults to false: this repo is node-free (the hk:base task pulls
     # gtb and the linters from mise), so hk runs without a pnpm install.
-    uses: gtbuchanan/tooling/.github/workflows/pre-commit.yml@v1.0.0
+    uses: gtbuchanan/tooling/.github/workflows/pre-commit.yml@cc8db05d356667bcff53d990ecee5a96a527f03c # v1.0.0
 
   unit:
     name: Unit Tests
@@ -31,10 +31,10 @@ jobs:
     # natively via mise's zig in seconds — no Termux/Docker.
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: gtbuchanan/tooling/.github/actions/mise-setup@v1.0.0
+      - uses: gtbuchanan/tooling/.github/actions/mise-setup@cc8db05d356667bcff53d990ecee5a96a527f03c # v1.0.0
       - run: mise run test:fast
 
   # Native arm64 runner (free for public repos) → the aarch64 container runs
@@ -44,13 +44,13 @@ jobs:
     name: Compile
     runs-on: ubuntu-26.04-arm
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: gtbuchanan/tooling/.github/actions/mise-setup@v1.0.0
+      - uses: gtbuchanan/tooling/.github/actions/mise-setup@cc8db05d356667bcff53d990ecee5a96a527f03c # v1.0.0
       - run: mise run compile
       - name: Upload .deb
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: deb
           path: artifacts/packages/*.deb
@@ -61,12 +61,12 @@ jobs:
     needs: compile
     runs-on: ubuntu-26.04-arm
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: gtbuchanan/tooling/.github/actions/mise-setup@v1.0.0
+      - uses: gtbuchanan/tooling/.github/actions/mise-setup@cc8db05d356667bcff53d990ecee5a96a527f03c # v1.0.0
       - name: Download the compiled .deb
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: deb
           path: artifacts/packages
