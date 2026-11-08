@@ -45,7 +45,7 @@ includes = ["mise-tasks", "mise.tasks.toml"]
 # builtins shell out to.
 [tools]
 hk = "2.11.1"
-jactionlint = "v2.4.0"
+jactionlint = "v2.5.0"
 node = "26.13.0"
 "npm:@gtbuchanan/cli" = "2.0.0"
 # Exempt transitive `@yarnpkg/libzip@3.2.2` from aube's no-downgrade policy.
