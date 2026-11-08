@@ -23,7 +23,7 @@ jobs:
     if: github.event_name == 'pull_request'
     # use-pnpm defaults to false: this repo is node-free (the hk:base task pulls
     # gtb and the linters from mise), so hk runs without a pnpm install.
-    uses: gtbuchanan/tooling/.github/workflows/pre-commit.yml@v1.0.0
+    uses: gtbuchanan/tooling/.github/workflows/pre-commit.yml@cc8db05d356667bcff53d990ecee5a96a527f03c # v1.0.0
 
   unit:
     name: Unit Tests
@@ -34,7 +34,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: gtbuchanan/tooling/.github/actions/mise-setup@v1.0.0
+      - uses: gtbuchanan/tooling/.github/actions/mise-setup@cc8db05d356667bcff53d990ecee5a96a527f03c # v1.0.0
       - run: mise run test:fast
 
   # Native arm64 runner (free for public repos) → the aarch64 container runs
@@ -47,7 +47,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: gtbuchanan/tooling/.github/actions/mise-setup@v1.0.0
+      - uses: gtbuchanan/tooling/.github/actions/mise-setup@cc8db05d356667bcff53d990ecee5a96a527f03c # v1.0.0
       - run: mise run compile
       - name: Upload .deb
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -64,7 +64,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: gtbuchanan/tooling/.github/actions/mise-setup@v1.0.0
+      - uses: gtbuchanan/tooling/.github/actions/mise-setup@cc8db05d356667bcff53d990ecee5a96a527f03c # v1.0.0
       - name: Download the compiled .deb
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
