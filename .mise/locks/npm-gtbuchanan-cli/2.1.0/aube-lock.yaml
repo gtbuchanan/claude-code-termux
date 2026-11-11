@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@gtbuchanan/cli':
-        specifier: 2.0.0
-        version: 2.0.0(skills@1.7.4)(typescript@7.0.2)
+        specifier: 2.1.0
+        version: 2.1.0(skills@1.7.6)(typescript@7.0.2)
 
 packages:
 
@@ -30,8 +30,8 @@ packages:
     resolution: {integrity: sha512-c5GoiQyt3pxiXjrWSNoP8/GRf4kG+VnKzovx1OQM8dYYALlSwgedmkPmJ+ZqGxqwg9D3Bkj85Uo4KLd5BN3A0w==}
     engines: {node: ^22.11 || ^24 || >=26}
 
-  '@gtbuchanan/cli@2.0.0':
-    resolution: {integrity: sha512-EtreEg3TtDNL2AXKuJ+iXik6MLFUUkErSgUIIn3NQETxB6Ur5xl5PrTlJ+RYpgK5T4c0YrxYdIwMshx3T2KY8w==}
+  '@gtbuchanan/cli@2.1.0':
+    resolution: {integrity: sha512-4fFnCXUEuFgjyyU6gt0PqeBSA4lt/AViIaRnVn9aVdZo0QXvjy9UCJygMxwUT/B+7tDmvh25fkep0Hf1Q0zv1A==}
     engines: {node: '>=24.0.0'}
     hasBin: true
     peerDependencies:
@@ -241,8 +241,8 @@ packages:
   resolve-pkg-maps@1.0.0:
     resolution: {integrity: sha512-seS2Tj26TBVOC2NIc2rOe2y2ZO7efxITtLZcGSOnHHNOQ7CkiUBfw0Iw2ck6xkIhPwLhKNLS8BO+hEpngQlqzw==}
 
-  semver@7.8.5:
-    resolution: {integrity: sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA==}
+  semver@7.8.6:
+    resolution: {integrity: sha512-9lpSSU4Mly3mrtruwLs1eLK6+gzbzqeBFwRNjIjE+9LuDpWdYctrQlQ3ej1Ilgi7gknpsTRnPoLP8DpCHqHIJw==}
     engines: {node: '>=10'}
     hasBin: true
 
@@ -254,8 +254,8 @@ packages:
     resolution: {integrity: sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A==}
     engines: {node: '>=8'}
 
-  skills@1.7.4:
-    resolution: {integrity: sha512-lHZJksE8UImNAr+LL6unqq7jERjdFw5EJasm17srycwL7rXHGdCmgu1L1ttLxUO9i3rdH+QQig+px0icHqLmRw==}
+  skills@1.7.6:
+    resolution: {integrity: sha512-dAee29yRGin7ub6VHwmifLEfHrysGD41yq4RkY0gg7QQh0wyQKWfhiORGb/r6uNpKWc9A1GY8yowV07Lh+4rCg==}
     engines: {node: '>=22.20.0'}
     hasBin: true
 
@@ -311,7 +311,7 @@ snapshots:
   '@changesets/get-dependents-graph@3.0.0':
     dependencies:
       '@changesets/types': 7.0.0
-      semver: 7.8.5
+      semver: 7.8.6
 
   '@changesets/should-skip-package@1.0.0':
     dependencies:
@@ -319,7 +319,7 @@ snapshots:
 
   '@changesets/types@7.0.0': {}
 
-  '@gtbuchanan/cli@2.0.0(skills@1.7.4)(typescript@7.0.2)':
+  '@gtbuchanan/cli@2.1.0(skills@1.7.6)(typescript@7.0.2)':
     dependencies:
       '@changesets/config': 4.0.1
       citty: 0.2.2
@@ -327,7 +327,7 @@ snapshots:
       find-up-simple: 1.0.1
       get-tsconfig: 4.14.3
       hosted-git-info: 10.1.1
-      skills: 1.7.4
+      skills: 1.7.6
       smol-toml: 1.9.1
       typescript: 7.0.2
       valibot: 1.5.0(typescript@7.0.2)
@@ -454,7 +454,7 @@ snapshots:
 
   resolve-pkg-maps@1.0.0: {}
 
-  semver@7.8.5: {}
+  semver@7.8.6: {}
 
   shebang-command@2.0.0:
     dependencies:
@@ -462,7 +462,7 @@ snapshots:
 
   shebang-regex@3.0.0: {}
 
-  skills@1.7.4:
+  skills@1.7.6:
     dependencies:
       tar: 7.5.22
       yaml: 2.9.1
