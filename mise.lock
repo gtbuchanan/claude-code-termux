@@ -141,10 +141,10 @@ checksum = "sha256:dcc60d59a0746999f99064a01c020445d54d84228c691cdbf25b49ac3b591
 url = "https://nodejs.org/dist/v26.13.0/node-v26.13.0-win-x64.zip"
 
 [[tools."npm:@gtbuchanan/cli"]]
-version = "2.0.0"
-aube = { path = ".mise/locks/npm-gtbuchanan-cli/2.0.0", digest = "sha256:468d33dbbd00074c6be238ae9ab3a101f38ee68fffd6c113fa243461bc6c968a" }
+version = "2.1.0"
+aube = { path = ".mise/locks/npm-gtbuchanan-cli/2.1.0", digest = "sha256:2ac63a031da75d1b001486a5cf7bd9f4d9787b692794b3b86e0ac1e8d8318287" }
 backend = "npm:@gtbuchanan/cli"
-specifiers = ["2.0.0"]
+specifiers = ["2.1.0"]
 
 [[tools."npm:renovate"]]
 version = "44.216.5"
