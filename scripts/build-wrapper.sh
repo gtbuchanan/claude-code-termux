@@ -22,9 +22,14 @@ EXECPATH_SHIM="$PREFIX/lib/claude-code-termux/execpath-redirect.so"
 # Redirect the absolute /etc/resolv.conf (absent on Android) to the prefix copy.
 RESOLV_SRC="/etc/resolv.conf"
 RESOLV_DST="$PREFIX/etc/resolv.conf"
-# Where the execpath shim points Claude's embedded-tool re-execs: the launcher
-# this same script compiles, which build-deb.sh stages to $PREFIX/bin/claude.
+# Where the execpath and launcher shims point Claude's embedded-tool re-execs:
+# the launcher this same script compiles, which build-deb.sh stages to
+# $PREFIX/bin/claude.
 LAUNCHER_PATH="$PREFIX/bin/claude"
+# The directory bootstrap.sh fetches the patched binary into; the launcher shim
+# redirects any exec under it. The trailing slash keeps the prefix match from
+# also catching a sibling directory that merely starts with the same name.
+BINARY_DIR="$PREFIX/opt/claude-code-termux/"
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 out="$root/artifacts/build"
@@ -54,6 +59,13 @@ mkdir -p "$out"
   -fno-stack-protector -fno-builtin \
   -DLAUNCHER_PATH="\"$LAUNCHER_PATH\"" \
   -o "$out/execpath-redirect.so" "$root/src/execpath-shim.c"
+
+# The launcher shim is NOT freestanding: it loads into the bionic shells Claude
+# spawns (via env.LD_PRELOAD in settings.json, written by postinst), never into
+# the glibc binary, so it links against bionic like any Termux library.
+"$CC" -O2 -Wall -Wextra -Werror -shared -fPIC \
+  -DLAUNCHER_PATH="\"$LAUNCHER_PATH\"" -DBINARY_DIR="\"$BINARY_DIR\"" \
+  -o "$out/launcher-redirect.so" "$root/src/launcher-shim.c" -ldl
 
 "$CC" -O2 -Wall -Wextra -Werror -DBINARY="\"$BINARY\"" -DTMPDIR_PATH="\"$TMPDIR_PATH\"" \
   -DUNAME_SHIM="\"$UNAME_SHIM\"" -DRESOLV_SHIM="\"$RESOLV_SHIM\"" \

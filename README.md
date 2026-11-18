@@ -107,8 +107,12 @@ current version (e.g. to repair a corrupted binary).
 On install the package merges two keys Claude needs on Termux (skip with
 `CLAUDE_CODE_SKIP_SETTINGS=1`, e.g. when a dotfile manager owns the file):
 
-- `env.LD_PRELOAD` → `libtermux-exec-ld-preload.so`. Re-arms termux-exec for
-  **subprocesses** so `#!/usr/bin/env …` shebangs (pnpm, npx, …) resolve.
+- `env.LD_PRELOAD` → `launcher-redirect.so:libtermux-exec-ld-preload.so`.
+  Re-arms termux-exec for **subprocesses** so `#!/usr/bin/env …` shebangs
+  (pnpm, npx, …) resolve. The package's launcher shim comes first and sends any
+  shell exec of the bare patched binary through the launcher, so Claude's
+  `grep`/`find` keep working even when its shell snapshot names that binary
+  directly.
 - `autoUpdates` → `false`. The in-session updater would otherwise overwrite the
   ELF-patched binary with a stock glibc one that won't exec.
 

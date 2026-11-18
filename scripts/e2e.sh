@@ -26,6 +26,7 @@ PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 settings="${HOME}/.claude/settings.json"
 native_link="${HOME}/.local/bin/claude"
 preload_lib="$PREFIX/lib/libtermux-exec-ld-preload.so"
+launcher_shim="$PREFIX/lib/claude-code-termux/launcher-redirect.so"
 patchelf="$PREFIX/glibc/bin/patchelf"
 glibc_ld="$PREFIX/glibc/lib/ld-linux-aarch64.so.1"
 # Populated by oneTimeSetUp, read by the tests.
@@ -147,6 +148,12 @@ test_execpath_shim_has_no_dt_needed() {
   assertEquals 'patchelf --print-needed ran' 0 "$rc"
   assertNull 'execpath-redirect.so has no DT_NEEDED (no libdl.so)' "$needed"
 }
+test_launcher_shim_installed() {
+  assertTrue 'launcher-redirect.so installed' "[ -f '$launcher_shim' ]"
+}
+test_launcher_shim_is_elf() {
+  assertEquals 'launcher-redirect.so is an ELF' 7f454c46 "$(elf_magic "$launcher_shim")"
+}
 test_bootstrap_installed() {
   assertTrue 'bootstrap.sh installed + executable' \
     "[ -x '$PREFIX/libexec/claude-code-termux/bootstrap.sh' ]"
@@ -178,6 +185,12 @@ test_settings_ld_preload_present() {
   assertTrue 'LD_PRELOAD re-export present' \
     "jq -e '.env.LD_PRELOAD | test(\"libtermux-exec\")' '$settings' >/dev/null"
 }
+# The launcher shim must precede termux-exec: its execve resolves the next one
+# with RTLD_NEXT, so termux-exec keeps handling every exec the shim forwards.
+test_settings_ld_preload_leads_with_launcher_shim() {
+  assertEquals 'LD_PRELOAD re-export leads with the launcher shim' \
+    "$launcher_shim:$preload_lib" "$(jq -r '.env.LD_PRELOAD' "$settings")"
+}
 test_settings_preserves_existing_keys() {
   assertTrue 'settings.json merge preserves pre-existing keys' \
     "jq -e '.permissions.allow | index(\"Bash(echo:*)\")' '$settings' >/dev/null"
@@ -206,7 +219,7 @@ test_postinst_falls_back_to_legacy_preload_lib() {
   : >"$root/lib/libtermux-exec.so" # only the legacy name present
   _run_isolated_postinst "$root"
   assertEquals 'falls back to legacy libtermux-exec.so when modern name absent' \
-    "$root/lib/libtermux-exec.so" \
+    "$root/lib/claude-code-termux/launcher-redirect.so:$root/lib/libtermux-exec.so" \
     "$(jq -r '.env.LD_PRELOAD' "$root/home/.claude/settings.json")"
   rm -rf "$root"
 }
@@ -384,6 +397,29 @@ EOF
     "$(LD_PRELOAD="$dir/execpath-redirect.so" "$dir/spawner" none 2>&1)" \
     'CLAUDE_CODE_EXECPATH'
   rm -rf "$dir"
+}
+
+# launcher redirect: with the tengu_playful_dusk gate on, the shell snapshot
+# bakes the bare binary's path into its grep/find functions, so rewriting
+# CLAUDE_CODE_EXECPATH no longer reaches the re-exec. Replay that re-exec in a
+# shell carrying the LD_PRELOAD postinst writes: without the shim, the glibc
+# ld.so loads termux-exec and aborts with "invalid ELF header". Counting a match
+# proves argv[0]=ugrep survived the detour through the launcher.
+test_launcher_redirect_dispatches_bare_binary_exec() {
+  local dir out
+  dir=$(mktemp -d)
+  printf 'foo\n' >"$dir/haystack"
+  # shellcheck disable=SC2016 # $1/$2 expand in the inner shell
+  out=$(LD_PRELOAD="$launcher_shim:$preload_lib" bash -c \
+    '(exec -a ugrep "$1" -G -c foo "$2")' _ \
+    "$PREFIX/opt/claude-code-termux/$installed" "$dir/haystack" 2>&1)
+  assertEquals 'bare-binary exec reaches embedded ugrep via the launcher' 1 "$out"
+  rm -rf "$dir"
+}
+test_launcher_redirect_leaves_other_execs_alone() {
+  assertContains 'unrelated exec runs its own program' \
+    "$(LD_PRELOAD="$launcher_shim:$preload_lib" "$PREFIX/bin/env" MARKER=1 2>&1)" \
+    'MARKER=1'
 }
 
 # TMPDIR injection: Termux has no writable /tmp, so the wrapper sets TMPDIR +

@@ -15,6 +15,7 @@ PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 SETTINGS="${CLAUDE_CODE_SETTINGS:-$HOME/.claude/settings.json}"
 BOOTSTRAP="$PREFIX/libexec/claude-code-termux/bootstrap.sh"
 LINK_NATIVE="$PREFIX/libexec/claude-code-termux/link-native.sh"
+LAUNCHER_SHIM="$PREFIX/lib/claude-code-termux/launcher-redirect.so"
 
 # termux-exec's LD_PRELOAD interposer is named `libtermux-exec-ld-preload.so` on
 # modern (2.x) termux-exec and `libtermux-exec.so` on older (1.x). Echo the first
@@ -36,7 +37,11 @@ configure)
   #   env.LD_PRELOAD — re-arms termux-exec for SUBPROCESSES so
   #                    #!/usr/bin/env shebangs (pnpm, npx, …) resolve. It is
   #                    applied after ld.so finishes with claude, so it never
-  #                    crashes claude itself.
+  #                    crashes claude itself. The launcher shim goes first: it
+  #                    sends execs of the bare binary (which the shell
+  #                    snapshot can bake into its grep/find functions)
+  #                    through the launcher, and forwards every other exec to
+  #                    termux-exec behind it. See src/launcher-shim.c.
   #   autoUpdates    — false, so the in-session updater never overwrites the
   #                    ELF-patched binary with a stock glibc one that won't exec.
   if [ -z "${CLAUDE_CODE_SKIP_SETTINGS:-}" ] && command -v jq >/dev/null 2>&1; then
@@ -49,10 +54,10 @@ configure)
     [ -n "$termux_exec_lib" ] ||
       echo "claude-code-termux: no termux-exec preload lib found in $PREFIX/lib; subprocess exec re-arming skipped." >&2
     tmp=$(mktemp)
-    if jq --arg preload "$termux_exec_lib" '
+    if jq --arg preload "$termux_exec_lib" --arg shim "$LAUNCHER_SHIM" '
             .autoUpdates = false
           | if $preload == "" then del(.env.LD_PRELOAD)
-            else .env = ((.env // {}) + {LD_PRELOAD: $preload}) end
+            else .env = ((.env // {}) + {LD_PRELOAD: "\($shim):\($preload)"}) end
         ' "$SETTINGS" >"$tmp" 2>/dev/null; then
       mv "$tmp" "$SETTINGS"
     else

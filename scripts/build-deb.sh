@@ -53,6 +53,10 @@ stage="$build/${PKG}_${VERSION}_${ARCH}"
   echo "error: $build/execpath-redirect.so not found — run build-wrapper.sh first." >&2
   exit 1
 }
+[ -f "$build/launcher-redirect.so" ] || {
+  echo "error: $build/launcher-redirect.so not found — run build-wrapper.sh first." >&2
+  exit 1
+}
 
 # Reset only the staging tree, preserving the compiled wrapper at $build/claude.
 rm -rf "$stage"
@@ -75,6 +79,9 @@ install -m 0755 "$build/claude" "$stage/$PREFIX_REL/bin/claude"
 install -m 0644 "$build/uname-spoof.so" "$stage/$PREFIX_REL/lib/$PKG/uname-spoof.so"
 install -m 0644 "$build/resolv-redirect.so" "$stage/$PREFIX_REL/lib/$PKG/resolv-redirect.so"
 install -m 0644 "$build/execpath-redirect.so" "$stage/$PREFIX_REL/lib/$PKG/execpath-redirect.so"
+# postinst preloads this one into Claude's subprocesses; the path it writes
+# into settings.json must match.
+install -m 0644 "$build/launcher-redirect.so" "$stage/$PREFIX_REL/lib/$PKG/launcher-redirect.so"
 install -m 0755 "$root/package/payload/bin/claude-code-termux-update" "$stage/$PREFIX_REL/bin/claude-code-termux-update"
 install -m 0755 "$root/package/payload/libexec/bootstrap.sh" "$stage/$PREFIX_REL/libexec/$PKG/bootstrap.sh"
 install -m 0755 "$root/package/payload/libexec/link-native.sh" "$stage/$PREFIX_REL/libexec/$PKG/link-native.sh"
