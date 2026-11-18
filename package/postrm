@@ -24,14 +24,16 @@ remove | purge)
   # The shim leaves with the package, and bionic's linker refuses to start a
   # process whose LD_PRELOAD names a missing library, so a value postinst wrote
   # would break every subprocess of a Claude that reads these settings later.
-  # Drop only the shim's entry; delete the key if nothing else was in it.
+  # Drop only the shim's entry; delete the key if nothing else was in it. Both
+  # linkers split LD_PRELOAD on spaces as well as colons, so split on either;
+  # rejoining with colons means the same list to both.
   if [ -z "${CLAUDE_CODE_SKIP_SETTINGS:-}" ] && [ -f "$SETTINGS" ] &&
     command -v jq >/dev/null 2>&1; then
     tmp=$(mktemp)
     if jq --arg shim "$LAUNCHER_SHIM" '
           if (.env.LD_PRELOAD | type) != "string" then .
-          else (.env.LD_PRELOAD | split(":") | map(select(. != $shim))
-                | join(":")) as $rest
+          else ([.env.LD_PRELOAD | splits("[ :]+")]
+                | map(select(. != "" and . != $shim)) | join(":")) as $rest
             | if $rest == "" then del(.env.LD_PRELOAD)
               else .env.LD_PRELOAD = $rest end
           end

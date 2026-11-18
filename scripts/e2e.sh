@@ -272,6 +272,18 @@ test_postrm_drops_launcher_shim_from_preload() {
     "$(jq -r '.env.LD_PRELOAD' "$root/home/.claude/settings.json")"
   rm -rf "$root"
 }
+# Both linkers also split LD_PRELOAD on spaces, so a hand-edited value can hold
+# the shim between space-separated entries.
+test_postrm_drops_launcher_shim_between_spaces() {
+  local root
+  root=$(mktemp -d)
+  _run_isolated_postrm "$root" \
+    "{\"env\":{\"LD_PRELOAD\":\"/w/first.so $root/lib/claude-code-termux/launcher-redirect.so /y/user.so:/x/libtermux-exec-ld-preload.so\"}}"
+  assertEquals 'postrm drops a space-separated launcher shim' \
+    '/w/first.so:/y/user.so:/x/libtermux-exec-ld-preload.so' \
+    "$(jq -r '.env.LD_PRELOAD' "$root/home/.claude/settings.json")"
+  rm -rf "$root"
+}
 test_postrm_deletes_preload_left_empty() {
   local root
   root=$(mktemp -d)
