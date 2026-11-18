@@ -411,7 +411,7 @@ test_execpath_redirect_rewrites_child_env() {
   dir=$(mktemp -d)
   clang -O2 -Wall -Wextra -Werror -shared -fPIC -nostdlib -ffreestanding \
     -fno-stack-protector -fno-builtin \
-    -DLAUNCHER_PATH='"/SENTINEL_LAUNCHER"' \
+    -DLAUNCHER_PATH='"/SENTINEL_LAUNCHER"' -DBINARY_DIR='"/SENTINEL_BINARY_DIR/"' \
     -o "$dir/execpath-redirect.so" src/execpath-shim.c 2>"$dir/cc.log"
   rc=$?
   assertEquals "execpath shim test build ($(cat "$dir/cc.log"))" 0 "$rc"
@@ -449,6 +449,50 @@ EOF
     "$(LD_PRELOAD="$dir/execpath-redirect.so" "$dir/spawner" none 2>&1)" \
     'CLAUDE_CODE_EXECPATH'
   rm -rf "$dir"
+}
+
+# Session spawn: `claude remote-control` spawns process.execPath, the bare
+# binary, for each session, and the child inherits the termux-exec preload from
+# settings.json. Spawn the bare binary as ugrep with that environment from a
+# process carrying the installed execpath shim: without the redirect, the glibc
+# ld.so aborts with "invalid ELF header". Counting a match proves the spawn went
+# through the launcher with argv[0] intact.
+test_execpath_redirect_routes_bare_binary_spawn() {
+  local dir rc out
+  dir=$(mktemp -d)
+  printf 'foo\n' >"$dir/haystack"
+  # Prototypes declared rather than taken from <spawn.h>/<sys/wait.h>, as in the
+  # spawner above.
+  cat >"$dir/spawner.c" <<EOF
+extern int posix_spawn(int *, const char *, const void *, const void *,
+                       char *const *, char *const *);
+extern int waitpid(int, int *, int);
+int main(int argc, char **argv) {
+  char *env[] = {"LD_PRELOAD=$preload_lib", 0};
+  char *args[] = {"ugrep", "-G", "-c", "foo", argv[2], 0};
+  int pid, status;
+  (void)argc;
+  if (posix_spawn(&pid, argv[1], 0, 0, args, env) != 0) return 9;
+  waitpid(pid, &status, 0);
+  return (status >> 8) & 0xff;
+}
+EOF
+  clang -O2 -o "$dir/spawner" "$dir/spawner.c" 2>"$dir/spawner.log"
+  rc=$?
+  assertEquals "spawner test build ($(cat "$dir/spawner.log"))" 0 "$rc"
+  out=$(LD_PRELOAD="$PREFIX/lib/claude-code-termux/execpath-redirect.so" \
+    "$dir/spawner" "$PREFIX/opt/claude-code-termux/$installed" "$dir/haystack" 2>&1)
+  assertEquals 'bare-binary spawn reaches embedded ugrep via the launcher' 1 "$out"
+  rm -rf "$dir"
+}
+# Without a settings.json preload, the launcher inherits Claude's own
+# LD_PRELOAD, so the execpath shim loads into the launcher too. Where bionic's
+# execv reaches the interposed execve, as it does in this container, redirecting
+# the launcher's exec of the binary would restart the launcher forever. The
+# timeout turns that loop into a failure instead of a hung suite.
+test_launcher_starts_with_execpath_shim_preloaded() {
+  assertTrue 'launcher starts with the execpath shim preloaded' \
+    "LD_PRELOAD='$PREFIX/lib/claude-code-termux/execpath-redirect.so' timeout 60 '$PREFIX/bin/claude' --version >/dev/null 2>&1"
 }
 
 # launcher redirect: with the tengu_playful_dusk gate on, the shell snapshot

@@ -26,9 +26,10 @@ RESOLV_DST="$PREFIX/etc/resolv.conf"
 # the launcher this same script compiles, which build-deb.sh stages to
 # $PREFIX/bin/claude.
 LAUNCHER_PATH="$PREFIX/bin/claude"
-# The directory bootstrap.sh fetches the patched binary into; the launcher shim
-# redirects any exec under it. The trailing slash keeps the prefix match from
-# also catching a sibling directory that merely starts with the same name.
+# The directory bootstrap.sh fetches the patched binary into; the launcher and
+# execpath shims redirect any exec under it. The trailing slash keeps the prefix
+# match from also catching a sibling directory that merely starts with the
+# same name.
 BINARY_DIR="$PREFIX/opt/claude-code-termux/"
 
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -57,7 +58,7 @@ mkdir -p "$out"
 # from rewriting the interposed exec/spawn calls.
 "$CC" -O2 -Wall -Wextra -Werror -shared -fPIC -nostdlib -ffreestanding \
   -fno-stack-protector -fno-builtin \
-  -DLAUNCHER_PATH="\"$LAUNCHER_PATH\"" \
+  -DLAUNCHER_PATH="\"$LAUNCHER_PATH\"" -DBINARY_DIR="\"$BINARY_DIR\"" \
   -o "$out/execpath-redirect.so" "$root/src/execpath-shim.c"
 
 # The launcher shim is NOT freestanding: it loads into the bionic shells Claude
