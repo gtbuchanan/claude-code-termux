@@ -38,7 +38,7 @@ minimum_release_age_excludes = ["npm:@gtbuchanan/*"]
 [task_config]
 includes = ["mise-tasks", "mise.tasks.toml"]
 
-# hk runs the lint hooks; pkl evaluates hk.pkl. node backs the `npm:` tools
+# hk runs the lint hooks, evaluating hk.pkl itself. node backs the `npm:` tools
 # (gtb drives the hk:* tasks; renovate supplies renovate-config-validator), uv
 # backs `pipx:clang-format` (mise's pipx backend defaults to uvx). zig builds
 # the C launcher + its unit tests. The rest are the per-language linters hk's
@@ -59,7 +59,6 @@ node = "26.13.1"
   "@yarnpkg/libzip@3.2.2",
 ], version = "44.251.0" }
 "pipx:clang-format" = "23.1.5"
-pkl = "0.32.2"
 ruff = "0.17.5"
 shellcheck = "0.11.0"
 shfmt = "3.14.1"
