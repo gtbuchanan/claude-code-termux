@@ -73,7 +73,7 @@ publish the binary; the `.deb` contains no Anthropic bytes.
 | `install.sh` | Single install path. Downloads the latest release `.deb` (or installs a local one via `CLAUDE_CODE_DEB=<path>`), refuses the Google Play build up front (it can't exec a glibc loader, and its `termux.net` omits `glibc-repo`), enables `glibc-repo` (when apt can't find it, aborting with the remedy for either a failed index refresh or a mirror that lacks it), `apt install`s it. The install flow is in `main` behind a `CLAUDE_CODE_INSTALL_LIB` guard so the unit test can source its pure helpers without running it (and `curl \| bash` still runs `main`). |
 | `package/control` | Metadata. `Depends: bash, curl, jq, glibc-runner, patchelf-glibc`. |
 | `package/postinst` | Settings merge (skip via `CLAUDE_CODE_SKIP_SETTINGS`) + native-path symlink (via `link-native.sh`) + fetch the binary. |
-| `package/postrm` | Removes the fetched binary and the native-path symlink on uninstall. |
+| `package/postrm` | Removes the fetched binary, the native-path symlink, and the launcher shim's `env.LD_PRELOAD` entry on uninstall (skip the settings edit via `CLAUDE_CODE_SKIP_SETTINGS`). |
 | `package/payload/bin/claude-code-termux-update` | Reconcile the native-path symlink (`link-native.sh`), then re-patch only if the version changed (`bootstrap.sh update`; schedulable). `--force` to re-apply. |
 | `package/payload/libexec/bootstrap.sh` | Resolve / download (`curl --retry`, optional `CLAUDE_CODE_CACHE_DIR`) / verify / `patchelf` engine. |
 | `package/payload/libexec/link-native.sh` | Idempotent native-path symlink (`~/.local/bin/claude` → launcher) reconcile, shared by `postinst` and the update command. |

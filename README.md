@@ -192,8 +192,11 @@ pkg uninstall claude-code-termux
 ```
 
 This removes the launcher, the downloaded binary, and the native-path symlink
-(`~/.local/bin/claude`, only if it still points at the launcher).
-`~/.claude/settings.json` is left untouched.
+(`~/.local/bin/claude`, only if it still points at the launcher). In
+`~/.claude/settings.json` it removes only the launcher shim's entry from
+`env.LD_PRELOAD`, since a preload naming a missing library stops every
+subprocess from starting; set `CLAUDE_CODE_SKIP_SETTINGS=1` to leave the file
+untouched.
 
 ## Prerequisites
 

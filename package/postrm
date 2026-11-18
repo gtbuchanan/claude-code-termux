@@ -2,20 +2,46 @@
 #
 # postrm — the downloaded Claude Code binary and the native-path symlink are
 # created at run time (not shipped in the package), so dpkg does not track them.
-# Clean them up on removal. settings.json is left untouched: it may hold the
-# user's own edits.
+# Clean them up on removal, and take the package's launcher shim back out of
+# settings.json's env.LD_PRELOAD. Everything else in settings.json stays: it may
+# hold the user's own edits.
+#
+# CLAUDE_CODE_SKIP_SETTINGS  leave settings.json untouched, as postinst does.
 #
 set -e
 
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 : "${HOME:=$PREFIX/../home}"
+SETTINGS="${CLAUDE_CODE_SETTINGS:-$HOME/.claude/settings.json}"
 OPT_DIR="$PREFIX/opt/claude-code-termux"
 WRAPPER="$PREFIX/bin/claude"
 NATIVE_LINK="$HOME/.local/bin/claude"
+LAUNCHER_SHIM="$PREFIX/lib/claude-code-termux/launcher-redirect.so"
 
 case "$1" in
 remove | purge)
   rm -rf "$OPT_DIR"
+  # The shim leaves with the package, and bionic's linker refuses to start a
+  # process whose LD_PRELOAD names a missing library, so a value postinst wrote
+  # would break every subprocess of a Claude that reads these settings later.
+  # Drop only the shim's entry; delete the key if nothing else was in it.
+  if [ -z "${CLAUDE_CODE_SKIP_SETTINGS:-}" ] && [ -f "$SETTINGS" ] &&
+    command -v jq >/dev/null 2>&1; then
+    tmp=$(mktemp)
+    if jq --arg shim "$LAUNCHER_SHIM" '
+          if (.env.LD_PRELOAD | type) != "string" then .
+          else (.env.LD_PRELOAD | split(":") | map(select(. != $shim))
+                | join(":")) as $rest
+            | if $rest == "" then del(.env.LD_PRELOAD)
+              else .env.LD_PRELOAD = $rest end
+          end
+        ' "$SETTINGS" >"$tmp" 2>/dev/null; then
+      mv "$tmp" "$SETTINGS"
+    else
+      rm -f "$tmp"
+      echo "claude-code-termux: could not update $SETTINGS; remove $LAUNCHER_SHIM from env.LD_PRELOAD by hand." >&2
+    fi
+  fi
   # Drop the native-path symlink only if it still points at our launcher,
   # so we never delete a user's own ~/.local/bin/claude. readlink compares
   # the stored target string, so it works even after dpkg removes $WRAPPER.

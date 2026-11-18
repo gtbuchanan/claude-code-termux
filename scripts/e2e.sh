@@ -251,6 +251,46 @@ test_postinst_clears_stale_preload_when_no_lib() {
   rm -rf "$root"
 }
 
+# postrm takes the launcher shim back out of env.LD_PRELOAD on removal: the
+# library goes with the package, and bionic's linker refuses to start a process
+# whose preload is missing. Driven in an isolated PREFIX/HOME like the postinst
+# tests above; the fake root holds no package files, so postrm's cleanup of the
+# binary directory and native symlink finds nothing to remove.
+_run_isolated_postrm() { # $1 = fake root, $2 = settings JSON; extra env via caller
+  local root="$1"
+  mkdir -p "$root/home/.claude"
+  printf '%s\n' "$2" >"$root/home/.claude/settings.json"
+  PREFIX="$root" HOME="$root/home" bash "$PWD/package/postrm" remove 2>/dev/null
+}
+test_postrm_drops_launcher_shim_from_preload() {
+  local root
+  root=$(mktemp -d)
+  _run_isolated_postrm "$root" \
+    "{\"env\":{\"LD_PRELOAD\":\"$root/lib/claude-code-termux/launcher-redirect.so:/x/libtermux-exec-ld-preload.so:/y/user.so\"}}"
+  assertEquals 'postrm keeps every preload entry but the launcher shim' \
+    '/x/libtermux-exec-ld-preload.so:/y/user.so' \
+    "$(jq -r '.env.LD_PRELOAD' "$root/home/.claude/settings.json")"
+  rm -rf "$root"
+}
+test_postrm_deletes_preload_left_empty() {
+  local root
+  root=$(mktemp -d)
+  _run_isolated_postrm "$root" \
+    "{\"env\":{\"FOO\":\"bar\",\"LD_PRELOAD\":\"$root/lib/claude-code-termux/launcher-redirect.so\"}}"
+  assertEquals 'postrm deletes LD_PRELOAD once only the shim was in it' \
+    '{"FOO":"bar"}' "$(jq -c '.env' "$root/home/.claude/settings.json")"
+  rm -rf "$root"
+}
+test_postrm_leaves_settings_when_skipped() {
+  local root json
+  root=$(mktemp -d)
+  json="{\"env\":{\"LD_PRELOAD\":\"$root/lib/claude-code-termux/launcher-redirect.so\"}}"
+  CLAUDE_CODE_SKIP_SETTINGS=1 _run_isolated_postrm "$root" "$json"
+  assertEquals 'postrm leaves settings.json alone under CLAUDE_CODE_SKIP_SETTINGS' \
+    "$json" "$(jq -c . "$root/home/.claude/settings.json")"
+  rm -rf "$root"
+}
+
 # --- Native-path symlink ----------------------------------------------------
 # postinst symlinks ~/.local/bin/claude → the launcher (not the patched binary)
 # so Claude's installMethod=native health check passes with the env setup intact.
