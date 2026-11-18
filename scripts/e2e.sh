@@ -416,9 +416,13 @@ test_launcher_redirect_dispatches_bare_binary_exec() {
   assertEquals 'bare-binary exec reaches embedded ugrep via the launcher' 1 "$out"
   rm -rf "$dir"
 }
+# The shim must be loaded in the process that calls execve, so preload it into
+# bash and let bash exec the unrelated program.
 test_launcher_redirect_leaves_other_execs_alone() {
+  # shellcheck disable=SC2016 # $1 expands in the inner shell
   assertContains 'unrelated exec runs its own program' \
-    "$(LD_PRELOAD="$launcher_shim:$preload_lib" "$PREFIX/bin/env" MARKER=1 2>&1)" \
+    "$(LD_PRELOAD="$launcher_shim:$preload_lib" bash -c '"$1" MARKER=1' _ \
+      "$PREFIX/bin/env" 2>&1)" \
     'MARKER=1'
 }
 
