@@ -50,9 +50,13 @@ publish the binary; the `.deb` contains no Anthropic bytes.
    second settings-independent layer behind `autoUpdates: false` (next item)
    against the self-updater.
 1. `postinst` also merges two keys into `~/.claude/settings.json`:
-   `env.LD_PRELOAD` (re-arms termux-exec for subprocess `/usr/bin/env` shebangs)
-   and `autoUpdates: false` (so the in-session updater can't clobber the patched
-   binary).
+   `env.LD_PRELOAD` and `autoUpdates: false` (so the in-session updater can't
+   clobber the patched binary). The preload re-arms termux-exec for subprocess
+   `/usr/bin/env` shebangs, led by the bionic **launcher** shim, which redirects
+   any shell `execve` of the bare binary to the launcher with `argv[0]` intact.
+   Behind a server-side feature gate the shell snapshot bakes the bare binary's
+   path into its `grep`/`find` functions, out of reach of the execpath shim's
+   environment rewrite (see `src/launcher-shim.c`).
 1. `postinst` symlinks `~/.local/bin/claude` → the launcher (Anthropic's
    native-install path) so Claude's `installMethod: native` health check passes;
    `postrm` removes it only when it still points at the launcher. The symlink
@@ -69,7 +73,7 @@ publish the binary; the `.deb` contains no Anthropic bytes.
 | `install.sh` | Single install path. Downloads the latest release `.deb` (or installs a local one via `CLAUDE_CODE_DEB=<path>`), refuses the Google Play build up front (it can't exec a glibc loader, and its `termux.net` omits `glibc-repo`), enables `glibc-repo` (when apt can't find it, aborting with the remedy for either a failed index refresh or a mirror that lacks it), `apt install`s it. The install flow is in `main` behind a `CLAUDE_CODE_INSTALL_LIB` guard so the unit test can source its pure helpers without running it (and `curl \| bash` still runs `main`). |
 | `package/control` | Metadata. `Depends: bash, curl, jq, glibc-runner, patchelf-glibc`. |
 | `package/postinst` | Settings merge (skip via `CLAUDE_CODE_SKIP_SETTINGS`) + native-path symlink (via `link-native.sh`) + fetch the binary. |
-| `package/postrm` | Removes the fetched binary and the native-path symlink on uninstall. |
+| `package/postrm` | Removes the fetched binary, the native-path symlink, and the launcher shim's `env.LD_PRELOAD` entry on uninstall (skip the settings edit via `CLAUDE_CODE_SKIP_SETTINGS`). |
 | `package/payload/bin/claude-code-termux-update` | Reconcile the native-path symlink (`link-native.sh`), then re-patch only if the version changed (`bootstrap.sh update`; schedulable). `--force` to re-apply. |
 | `package/payload/libexec/bootstrap.sh` | Resolve / download (`curl --retry`, optional `CLAUDE_CODE_CACHE_DIR`) / verify / `patchelf` engine. |
 | `package/payload/libexec/link-native.sh` | Idempotent native-path symlink (`~/.local/bin/claude` → launcher) reconcile, shared by `postinst` and the update command. |
@@ -78,6 +82,7 @@ publish the binary; the `.deb` contains no Anthropic bytes.
 | `src/uname-shim.c` | Freestanding `LD_PRELOAD` `uname()` interposer reporting kernel `5.10.0`, so Bun avoids the `epoll_pwait2` startup segfault (bun#32489). Built by `build-wrapper.sh`, shipped to `lib/claude-code-termux/uname-spoof.so`, preloaded by the launcher. |
 | `src/resolv-shim.c` | Freestanding `LD_PRELOAD` `fopen`/`open`-family interposer that redirects the absolute `/etc/resolv.conf` (absent on Android) to `$PREFIX/etc/resolv.conf`, so bundled Bun's c-ares resolves DNS on its `node:http` path (WebFetch/claude.ai-MCP/OTEL) instead of hanging (issue #25). References `dlsym` as an undefined symbol resolved from `libc.so.6` — **no `-ldl`**, so zero `DT_NEEDED` (a `libdl.so` dep would break the glibc `ld.so` load). Built by `build-wrapper.sh`, shipped to `lib/claude-code-termux/resolv-redirect.so`, preloaded by the launcher alongside the uname shim. |
 | `src/execpath-shim.c` | Freestanding `LD_PRELOAD` `execve`/`posix_spawn`-family interposer that rewrites `CLAUDE_CODE_EXECPATH` in every spawned child's `envp` to name the launcher, so the shell snapshot's embedded `ugrep`/`bfs` re-execs go through it instead of straight at the bare binary (issue #61). Replaces an existing entry only — never appends one, so unrelated children keep their environment. Same `dlsym`/no-`-ldl`/zero-`DT_NEEDED` constraints as the resolv shim. Built by `build-wrapper.sh`, shipped to `lib/claude-code-termux/execpath-redirect.so`, preloaded by the launcher. |
+| `src/launcher-shim.c` | **Bionic** `LD_PRELOAD` `execve` interposer that redirects execs under the binary's directory to the launcher, keeping `argv`, so snapshot functions that bake in the bare binary's path still dispatch `ugrep`/`bfs`. Loads into the shells Claude spawns, never the glibc binary, so it links against bionic normally (`-ldl`). Built by `build-wrapper.sh`, shipped to `lib/claude-code-termux/launcher-redirect.so`, preloaded through `env.LD_PRELOAD` (written by `postinst`) ahead of termux-exec. |
 | `test/wrapper_test.c` | Unit tests for the launcher (greatest; recording exec stub). |
 | `test/install_test.sh` | Hermetic unit tests for `install.sh`'s pure helpers (shUnit2; no network/apt). |
 | `test/compat.h` | Test-only `setenv`/`unsetenv` shims for Windows libc; force-included into the test build, never shipped. |
@@ -163,7 +168,9 @@ Bun's event loop — catching startup crashes the `--version` fast path can't,
 e.g. the Bun 1.4.0 `epoll_pwait2` segfault the uname shim prevents), the resolv
 redirect (the shim rewrites a configured path and carries no `DT_NEEDED`, #25),
 the execpath redirect (the shim rewrites `CLAUDE_CODE_EXECPATH` in a spawned
-child's environment and leaves an environment without it alone, #61),
+child's environment and leaves an environment without it alone, #61), the
+launcher redirect (a shell `exec -a ugrep` of the bare binary reaches ripgrep
+through the launcher),
 `TMPDIR` injection, the `settings.json` merge, the conditional/cached update
 paths, and the interpreter-repair `ensure`. The suite is built on the vendored shUnit2 (a
 single sourced file; the install is its `oneTimeSetUp`, behaviors are
