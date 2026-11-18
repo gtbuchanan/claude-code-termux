@@ -87,7 +87,8 @@ re-downloaded. Leave it empty (the default) to disable caching.
    resolve DNS instead of hanging; and an `execpath` shim that points
    `CLAUDE_CODE_EXECPATH` at the launcher in every process Claude spawns, so the
    embedded `grep`/`find` wrappers re-exec through it rather than crashing on the
-   bare binary. It also sets `TMPDIR`/`CLAUDE_CODE_TMPDIR` to
+   bare binary, and that sends Claude's own spawns of the bare binary (each
+   `claude remote-control` session) through the launcher too. It also sets `TMPDIR`/`CLAUDE_CODE_TMPDIR` to
    the Termux prefix (only when unset) since Termux has no writable `/tmp`.
 1. The postinstall also symlinks the launcher onto Anthropic's native-install
    path (`~/.local/bin/claude`) so Claude's health check passes when it detects

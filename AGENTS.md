@@ -42,7 +42,9 @@ publish the binary; the `.deb` contains no Anthropic bytes.
    than the bare binary — that variable is what the shell snapshot's embedded
    `ugrep`/`bfs` wrappers re-exec, and pointing it at the bare binary sends the
    re-exec into `ld.so` carrying the bionic `LD_PRELOAD` (see
-   `src/execpath-shim.c` and issue #61). It also
+   `src/execpath-shim.c` and issue #61). The same shim redirects Claude's own
+   spawns of the bare binary, such as each `claude remote-control` session, to
+   the launcher. It also
    **sets `TMPDIR`/`CLAUDE_CODE_TMPDIR`** to the Termux prefix when unset (Termux
    has no writable `/tmp`; see `src/claude-wrapper.c` for the
    env-vs-hardcoded-`/tmp` analysis and the MCP-browser-bridge limitation,
@@ -81,7 +83,7 @@ publish the binary; the `.deb` contains no Anthropic bytes.
 | `src/claude-wrapper.c` | The C launcher (binary, tmpdir, and shim paths baked in at compile). `claude_wrapper_run()` takes its exec function as a parameter — a seam the unit tests fake. |
 | `src/uname-shim.c` | Freestanding `LD_PRELOAD` `uname()` interposer reporting kernel `5.10.0`, so Bun avoids the `epoll_pwait2` startup segfault (bun#32489). Built by `build-wrapper.sh`, shipped to `lib/claude-code-termux/uname-spoof.so`, preloaded by the launcher. |
 | `src/resolv-shim.c` | Freestanding `LD_PRELOAD` `fopen`/`open`-family interposer that redirects the absolute `/etc/resolv.conf` (absent on Android) to `$PREFIX/etc/resolv.conf`, so bundled Bun's c-ares resolves DNS on its `node:http` path (WebFetch/claude.ai-MCP/OTEL) instead of hanging (issue #25). References `dlsym` as an undefined symbol resolved from `libc.so.6` — **no `-ldl`**, so zero `DT_NEEDED` (a `libdl.so` dep would break the glibc `ld.so` load). Built by `build-wrapper.sh`, shipped to `lib/claude-code-termux/resolv-redirect.so`, preloaded by the launcher alongside the uname shim. |
-| `src/execpath-shim.c` | Freestanding `LD_PRELOAD` `execve`/`posix_spawn`-family interposer that rewrites `CLAUDE_CODE_EXECPATH` in every spawned child's `envp` to name the launcher, so the shell snapshot's embedded `ugrep`/`bfs` re-execs go through it instead of straight at the bare binary (issue #61). Replaces an existing entry only — never appends one, so unrelated children keep their environment. Same `dlsym`/no-`-ldl`/zero-`DT_NEEDED` constraints as the resolv shim. Built by `build-wrapper.sh`, shipped to `lib/claude-code-termux/execpath-redirect.so`, preloaded by the launcher. |
+| `src/execpath-shim.c` | Freestanding `LD_PRELOAD` `execve`/`posix_spawn`-family interposer that rewrites `CLAUDE_CODE_EXECPATH` in every spawned child's `envp` to name the launcher, so the shell snapshot's embedded `ugrep`/`bfs` re-execs go through it instead of straight at the bare binary (issue #61), and redirects a spawn whose path lies under the binary's directory (`claude remote-control` sessions) to the launcher. Replaces an existing entry only — never appends one, so unrelated children keep their environment. Same `dlsym`/no-`-ldl`/zero-`DT_NEEDED` constraints as the resolv shim. Built by `build-wrapper.sh`, shipped to `lib/claude-code-termux/execpath-redirect.so`, preloaded by the launcher. |
 | `src/launcher-shim.c` | **Bionic** `LD_PRELOAD` `execve` interposer that redirects execs under the binary's directory to the launcher, keeping `argv`, so snapshot functions that bake in the bare binary's path still dispatch `ugrep`/`bfs`. Loads into the shells Claude spawns, never the glibc binary, so it links against bionic normally (`-ldl`). Built by `build-wrapper.sh`, shipped to `lib/claude-code-termux/launcher-redirect.so`, preloaded through `env.LD_PRELOAD` (written by `postinst`) ahead of termux-exec. |
 | `test/wrapper_test.c` | Unit tests for the launcher (greatest; recording exec stub). |
 | `test/install_test.sh` | Hermetic unit tests for `install.sh`'s pure helpers (shUnit2; no network/apt). |
@@ -168,8 +170,9 @@ Bun's event loop — catching startup crashes the `--version` fast path can't,
 e.g. the Bun 1.4.0 `epoll_pwait2` segfault the uname shim prevents), the resolv
 redirect (the shim rewrites a configured path and carries no `DT_NEEDED`, #25),
 the execpath redirect (the shim rewrites `CLAUDE_CODE_EXECPATH` in a spawned
-child's environment and leaves an environment without it alone, #61), the
-launcher redirect (a shell `exec -a ugrep` of the bare binary reaches ripgrep
+child's environment and leaves an environment without it alone, #61; a spawn
+of the bare binary reaches ripgrep through the launcher; the launcher still
+starts with the shim preloaded), the launcher redirect (a shell `exec -a ugrep` of the bare binary reaches ripgrep
 through the launcher),
 `TMPDIR` injection, the `settings.json` merge, the conditional/cached update
 paths, and the interpreter-repair `ensure`. The suite is built on the vendored shUnit2 (a

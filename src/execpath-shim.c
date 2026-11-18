@@ -1,6 +1,8 @@
 /*
- * execpath-shim — LD_PRELOAD interposer that rewrites CLAUDE_CODE_EXECPATH in
- * the environment of every process Claude spawns, pointing it at LAUNCHER_PATH.
+ * execpath-shim — LD_PRELOAD interposer that points the processes Claude spawns
+ * at LAUNCHER_PATH instead of the bare patched binary: it rewrites
+ * CLAUDE_CODE_EXECPATH in every child's environment, and it redirects a spawn
+ * of the binary itself.
  *
  * Claude's shell snapshot re-execs its embedded tools through that variable:
  *
@@ -30,13 +32,23 @@
  * launcher, and staying out of unrelated children's environments keeps the
  * blast radius to the case that is actually broken.
  *
+ * Claude also spawns process.execPath directly: `claude remote-control` starts
+ * each session that way. The child inherits the same bionic LD_PRELOAD and
+ * dies the same way, so a spawn whose path lies under BINARY_DIR goes to the
+ * launcher instead, argv untouched so argv[0] dispatch still works. The
+ * directory holds only the patched binaries and the `current` symlink, so the
+ * prefix match names exactly the spawns that need it. The redirect is skipped
+ * inside the launcher itself: a launcher that inherits Claude's own LD_PRELOAD
+ * loads this shim, and on a bionic whose execv reaches the interposed execve,
+ * redirecting its exec of the binary would start the launcher again, forever.
+ *
  * Freestanding, like the package's other shims: no libc of its own, dlsym left
  * undefined and resolved from libc.so.6 at load — deliberately NO -ldl, so the
  * object carries no DT_NEEDED (a libdl.so dep would break the glibc ld.so
  * load; that was the failure mode in #25).
  *
- * aarch64 Termux only. LAUNCHER_PATH is baked in (build-wrapper.sh); the
- * launcher preloads this alongside its other shims.
+ * aarch64 Termux only. LAUNCHER_PATH and BINARY_DIR are baked in
+ * (build-wrapper.sh); the launcher preloads this alongside its other shims.
  */
 
 #ifndef LAUNCHER_PATH
@@ -44,11 +56,17 @@
     "LAUNCHER_PATH must be defined at compile time (-DLAUNCHER_PATH=\"/…/bin/claude\")"
 #endif
 
+#ifndef BINARY_DIR
+#error                                                                         \
+    "BINARY_DIR must be defined at compile time (-DBINARY_DIR=\"/…/opt/claude-code-termux/\")"
+#endif
+
 #define RTLD_NEXT ((void *)-1L)
 extern void *dlsym(void *handle, const char *symbol);
 
 static const char kKey[] = "CLAUDE_CODE_EXECPATH=";
 static const char kEntry[] = "CLAUDE_CODE_EXECPATH=" LAUNCHER_PATH;
+static const char kBinaryDir[] = BINARY_DIR;
 
 /*
  * Upper bound on the environment we will rewrite. The copy lives on the
@@ -60,17 +78,56 @@ static const char kEntry[] = "CLAUDE_CODE_EXECPATH=" LAUNCHER_PATH;
  */
 #define MAX_ENV_ENTRIES 1024
 
-/* Freestanding prefix test — no libc. Returns 1 iff s starts with kKey. */
-static int is_execpath_entry(const char *s) {
+/* Freestanding prefix test — no libc. Returns 1 iff s starts with prefix. */
+static int has_prefix(const char *s, const char *prefix) {
   if (s == 0) {
     return 0;
   }
-  for (const char *k = kKey; *k != '\0'; k++, s++) {
-    if (*s != *k) {
+  for (const char *p = prefix; *p != '\0'; p++, s++) {
+    if (*s != *p) {
       return 0;
     }
   }
   return 1;
+}
+
+static int is_execpath_entry(const char *s) { return has_prefix(s, kKey); }
+
+static long raw_readlinkat(const char *path, char *buf, unsigned long size) {
+  register long x8 __asm__("x8") = 78;   /* __NR_readlinkat on aarch64 */
+  register long x0 __asm__("x0") = -100; /* AT_FDCWD */
+  register long x1 __asm__("x1") = (long)path;
+  register long x2 __asm__("x2") = (long)buf;
+  register long x3 __asm__("x3") = (long)size;
+  __asm__ volatile("svc #0"
+                   : "+r"(x0)
+                   : "r"(x8), "r"(x1), "r"(x2), "r"(x3)
+                   : "memory");
+  return x0;
+}
+
+/* 1 iff this process is the launcher. readlinkat does not NUL-terminate, and
+   the buffer holds one byte past LAUNCHER_PATH so a longer target is told
+   apart from an exact match. */
+static int in_launcher(void) {
+  static const char kLauncher[] = LAUNCHER_PATH;
+  char self[sizeof(kLauncher)];
+  long n = raw_readlinkat("/proc/self/exe", self, sizeof(self));
+  if (n != (long)sizeof(kLauncher) - 1) {
+    return 0;
+  }
+  for (long i = 0; i < n; i++) {
+    if (self[i] != kLauncher[i]) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+/* The path to exec: the launcher for the bare binary, else path unchanged. A
+   bare file name for execvpe/posix_spawnp has no slash, so it never matches. */
+static const char *redirect_path(const char *path) {
+  return has_prefix(path, kBinaryDir) && !in_launcher() ? LAUNCHER_PATH : path;
 }
 
 static int env_len(char *const *envp) {
@@ -116,8 +173,9 @@ typedef int (*spawn_fn)(int *, const char *, const void *, const void *,
                         char *const *, char *const *);
 
 /* Each interposer resolves the real libc symbol once (RTLD_NEXT skips this
-   preload) and forwards with the environment rewritten; if it can't be resolved
-   it fails closed (-1) rather than dereferencing a NULL pointer. */
+   preload) and forwards with the path redirected and the environment rewritten;
+   if it cannot be resolved it fails closed (-1) rather than dereferencing a
+   NULL pointer. */
 int execve(const char *path, char *const argv[], char *const envp[]) {
   static execve_fn real = 0;
   if (real == 0) {
@@ -128,9 +186,9 @@ int execve(const char *path, char *const argv[], char *const envp[]) {
   }
   const char *buf[MAX_ENV_ENTRIES + 1];
   if (!rewrite_env(envp, buf, MAX_ENV_ENTRIES)) {
-    return real(path, argv, envp);
+    return real(redirect_path(path), argv, envp);
   }
-  return real(path, argv, (char *const *)buf);
+  return real(redirect_path(path), argv, (char *const *)buf);
 }
 
 int execvpe(const char *file, char *const argv[], char *const envp[]) {
@@ -143,9 +201,9 @@ int execvpe(const char *file, char *const argv[], char *const envp[]) {
   }
   const char *buf[MAX_ENV_ENTRIES + 1];
   if (!rewrite_env(envp, buf, MAX_ENV_ENTRIES)) {
-    return real(file, argv, envp);
+    return real(redirect_path(file), argv, envp);
   }
-  return real(file, argv, (char *const *)buf);
+  return real(redirect_path(file), argv, (char *const *)buf);
 }
 
 int posix_spawn(int *pid, const char *path, const void *file_actions,
@@ -159,9 +217,10 @@ int posix_spawn(int *pid, const char *path, const void *file_actions,
   }
   const char *buf[MAX_ENV_ENTRIES + 1];
   if (!rewrite_env(envp, buf, MAX_ENV_ENTRIES)) {
-    return real(pid, path, file_actions, attrp, argv, envp);
+    return real(pid, redirect_path(path), file_actions, attrp, argv, envp);
   }
-  return real(pid, path, file_actions, attrp, argv, (char *const *)buf);
+  return real(pid, redirect_path(path), file_actions, attrp, argv,
+              (char *const *)buf);
 }
 
 int posix_spawnp(int *pid, const char *file, const void *file_actions,
@@ -175,7 +234,8 @@ int posix_spawnp(int *pid, const char *file, const void *file_actions,
   }
   const char *buf[MAX_ENV_ENTRIES + 1];
   if (!rewrite_env(envp, buf, MAX_ENV_ENTRIES)) {
-    return real(pid, file, file_actions, attrp, argv, envp);
+    return real(pid, redirect_path(file), file_actions, attrp, argv, envp);
   }
-  return real(pid, file, file_actions, attrp, argv, (char *const *)buf);
+  return real(pid, redirect_path(file), file_actions, attrp, argv,
+              (char *const *)buf);
 }
