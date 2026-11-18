@@ -59,7 +59,7 @@ node = "26.13.1"
   "@yarnpkg/libzip@3.2.2",
 ], version = "44.251.0" }
 "pipx:clang-format" = "23.1.5"
-pkl = "0.32.2"
+pkl = "0.33.0"
 ruff = "0.17.5"
 shellcheck = "0.11.0"
 shfmt = "3.14.1"
