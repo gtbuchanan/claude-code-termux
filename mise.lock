@@ -50,56 +50,56 @@ url = "https://github.com/jdx/hk/releases/download/v2.12.0/hk-x86_64-pc-windows-
 url_api = "https://api.github.com/repos/jdx/hk/releases/assets/728911213"
 
 [[tools.jactionlint]]
-version = "2.6.0"
+version = "2.7.0"
 backend = "github:jdx/jactionlint"
-specifiers = ["v2.6.0"]
+specifiers = ["v2.7.0"]
 
 [tools.jactionlint."platforms.android-arm64"]
-checksum = "sha256:c726185a85f26d09aa94ea556509a19827979074b35d65f357f3a4947573e934"
-url = "https://github.com/jdx/jactionlint/releases/download/v2.6.0/jactionlint_2.6.0_linux_arm64.tar.gz"
-url_api = "https://api.github.com/repos/jdx/jactionlint/releases/assets/740515805"
+checksum = "sha256:a615936cb17f36a9a6472d3a402a0752403b49c5cf18c1820cdbc74012759fa4"
+url = "https://github.com/jdx/jactionlint/releases/download/v2.7.0/jactionlint_2.7.0_linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/jdx/jactionlint/releases/assets/804234317"
 provenance = "github-attestations"
 
 [tools.jactionlint."platforms.linux-arm64"]
-checksum = "sha256:c726185a85f26d09aa94ea556509a19827979074b35d65f357f3a4947573e934"
-url = "https://github.com/jdx/jactionlint/releases/download/v2.6.0/jactionlint_2.6.0_linux_arm64.tar.gz"
-url_api = "https://api.github.com/repos/jdx/jactionlint/releases/assets/740515805"
+checksum = "sha256:a615936cb17f36a9a6472d3a402a0752403b49c5cf18c1820cdbc74012759fa4"
+url = "https://github.com/jdx/jactionlint/releases/download/v2.7.0/jactionlint_2.7.0_linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/jdx/jactionlint/releases/assets/804234317"
 provenance = "github-attestations"
 
 [tools.jactionlint."platforms.linux-arm64-musl"]
-checksum = "sha256:c726185a85f26d09aa94ea556509a19827979074b35d65f357f3a4947573e934"
-url = "https://github.com/jdx/jactionlint/releases/download/v2.6.0/jactionlint_2.6.0_linux_arm64.tar.gz"
-url_api = "https://api.github.com/repos/jdx/jactionlint/releases/assets/740515805"
+checksum = "sha256:a615936cb17f36a9a6472d3a402a0752403b49c5cf18c1820cdbc74012759fa4"
+url = "https://github.com/jdx/jactionlint/releases/download/v2.7.0/jactionlint_2.7.0_linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/jdx/jactionlint/releases/assets/804234317"
 provenance = "github-attestations"
 
 [tools.jactionlint."platforms.linux-x64"]
-checksum = "sha256:d5400967b8f0d3a5ae9a4cee21f56400a50eb3f05d0cbb4ef17184f17f0760c8"
-url = "https://github.com/jdx/jactionlint/releases/download/v2.6.0/jactionlint_2.6.0_linux_amd64.tar.gz"
-url_api = "https://api.github.com/repos/jdx/jactionlint/releases/assets/740515801"
+checksum = "sha256:a86405db17b2dd04c0b431d07da7c4cc3ff49f13f5b3c0f72d732d72af4bee7a"
+url = "https://github.com/jdx/jactionlint/releases/download/v2.7.0/jactionlint_2.7.0_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/jdx/jactionlint/releases/assets/804234322"
 provenance = "github-attestations"
 
 [tools.jactionlint."platforms.linux-x64-musl"]
-checksum = "sha256:d5400967b8f0d3a5ae9a4cee21f56400a50eb3f05d0cbb4ef17184f17f0760c8"
-url = "https://github.com/jdx/jactionlint/releases/download/v2.6.0/jactionlint_2.6.0_linux_amd64.tar.gz"
-url_api = "https://api.github.com/repos/jdx/jactionlint/releases/assets/740515801"
+checksum = "sha256:a86405db17b2dd04c0b431d07da7c4cc3ff49f13f5b3c0f72d732d72af4bee7a"
+url = "https://github.com/jdx/jactionlint/releases/download/v2.7.0/jactionlint_2.7.0_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/jdx/jactionlint/releases/assets/804234322"
 provenance = "github-attestations"
 
 [tools.jactionlint."platforms.macos-arm64"]
-checksum = "sha256:c3f373c7eac668aacb390b9c802cf4b5e2ad1a11b0b0c0aea6b04ca0cfa0c018"
-url = "https://github.com/jdx/jactionlint/releases/download/v2.6.0/jactionlint_2.6.0_darwin_arm64.tar.gz"
-url_api = "https://api.github.com/repos/jdx/jactionlint/releases/assets/740515965"
+checksum = "sha256:2d5b5cad53212b5d6eee235596715c24d25acbcdbe73e347fe49785395458814"
+url = "https://github.com/jdx/jactionlint/releases/download/v2.7.0/jactionlint_2.7.0_darwin_arm64.tar.gz"
+url_api = "https://api.github.com/repos/jdx/jactionlint/releases/assets/804234243"
 provenance = "github-attestations"
 
 [tools.jactionlint."platforms.macos-x64"]
-checksum = "sha256:aa89c49ad5c9530f2308f18333166050f97f14d420f478a8225d043bef1e2cab"
-url = "https://github.com/jdx/jactionlint/releases/download/v2.6.0/jactionlint_2.6.0_darwin_amd64.tar.gz"
-url_api = "https://api.github.com/repos/jdx/jactionlint/releases/assets/740515909"
+checksum = "sha256:a383f17a2d5cc1b26bc5a0e531175704a94ac2b08abbb5f6d46027f36fa3a244"
+url = "https://github.com/jdx/jactionlint/releases/download/v2.7.0/jactionlint_2.7.0_darwin_amd64.tar.gz"
+url_api = "https://api.github.com/repos/jdx/jactionlint/releases/assets/804234237"
 provenance = "github-attestations"
 
 [tools.jactionlint."platforms.windows-x64"]
-checksum = "sha256:e939dd8c0eeeb620e70d30aa9aa21c671be078876660a831a82d07e372f0fa4d"
-url = "https://github.com/jdx/jactionlint/releases/download/v2.6.0/jactionlint_2.6.0_windows_amd64.zip"
-url_api = "https://api.github.com/repos/jdx/jactionlint/releases/assets/740516065"
+checksum = "sha256:61909e844575bf04f0418df0d1e1aa2674bff760597f85fa64eccbcee5cfdc86"
+url = "https://github.com/jdx/jactionlint/releases/download/v2.7.0/jactionlint_2.7.0_windows_amd64.zip"
+url_api = "https://api.github.com/repos/jdx/jactionlint/releases/assets/804234375"
 provenance = "github-attestations"
 
 [[tools.node]]
